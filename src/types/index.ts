@@ -12,3 +12,9 @@ export interface ProcessedImage {
   status: 'pending' | 'rendering' | 'done' | 'error';
   errorMessage?: string;
 }
+
+export interface QuotaInfo {
+  remaining: number;
+  limit: number;
+  resetAt: string; // ISO timestamp
+}

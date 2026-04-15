@@ -1,17 +1,27 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import Navbar from '@/components/Navbar';
 import UploadZone from '@/components/UploadZone';
 import ImageResultCard from '@/components/ImageResultCard';
 import ProgressBar from '@/components/ProgressBar';
 import AdUnit from '@/components/AdUnit';
-import { ProcessedImage } from '@/types';
+import { ProcessedImage, QuotaInfo } from '@/types';
 
 type AppStatus = 'idle' | 'processing' | 'done';
 
 export default function HomePage() {
   const [status, setStatus] = useState<AppStatus>('idle');
   const [queue, setQueue] = useState<ProcessedImage[]>([]);
+  const [quota, setQuota] = useState<QuotaInfo | null>(null);
+
+  // Fetch quota on mount
+  useEffect(() => {
+    fetch('/api/quota')
+      .then((r) => r.json())
+      .then((data: QuotaInfo) => setQuota(data))
+      .catch(() => null);
+  }, []);
 
   const updateImage = useCallback((id: string, patch: Partial<ProcessedImage>) => {
     setQueue((prev) =>
@@ -29,9 +39,18 @@ export default function HomePage() {
       const text = await response.text().catch(() => '');
       let message = 'Server error';
       try {
-        message = JSON.parse(text).error ?? message;
+        const parsed = JSON.parse(text);
+        message = parsed.error ?? message;
+        // Update quota from 429 response
+        if (response.status === 429 && parsed.remaining !== undefined) {
+          setQuota((prev) =>
+            prev
+              ? { ...prev, remaining: parsed.remaining, resetAt: parsed.resetAt }
+              : null
+          );
+        }
       } catch {
-        // plain text error
+        // plain text
       }
       updateImage(imageId, { status: 'error', errorMessage: message });
       return;
@@ -72,6 +91,14 @@ export default function HomePage() {
             variations: event.variations as ProcessedImage['variations'],
             selectedIndex: 0,
           });
+          // Update quota display from server response
+          if (event.remaining !== undefined) {
+            setQuota((prev) =>
+              prev
+                ? { ...prev, remaining: event.remaining as number, resetAt: event.resetAt as string }
+                : null
+            );
+          }
         } else if (step === 'error') {
           updateImage(imageId, {
             status: 'error',
@@ -83,7 +110,6 @@ export default function HomePage() {
   };
 
   const handleSubmit = async (files: File[]) => {
-    // Build initial queue entries
     const entries: ProcessedImage[] = files.map((file) => ({
       imageId: crypto.randomUUID(),
       originalFileName: file.name,
@@ -96,7 +122,6 @@ export default function HomePage() {
     setQueue((prev) => [...prev, ...entries]);
     setStatus('processing');
 
-    // Process sequentially to avoid rate limits
     for (let i = 0; i < files.length; i++) {
       await processFile(files[i], entries[i].imageId);
     }
@@ -105,40 +130,49 @@ export default function HomePage() {
   };
 
   const isProcessing = status === 'processing';
+  const quotaExhausted = quota !== null && quota.remaining === 0;
 
   const headerSlot = process.env.NEXT_PUBLIC_ADSENSE_SLOT_HEADER ?? 'header';
   const sidebarSlot = process.env.NEXT_PUBLIC_ADSENSE_SLOT_SIDEBAR ?? 'sidebar';
 
+  const doneResults = queue.filter((img) => img.status === 'done');
+  const inProgressItems = queue.filter((img) => img.status !== 'done');
+
   return (
-    <div className="space-y-10">
-      {/* Hero */}
-      <div className="text-center space-y-3 pt-4">
-        <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">
-          <span className="text-brand-400">Manga</span> Translator
-        </h1>
-        <p className="text-gray-400 text-lg max-w-xl mx-auto">
-          Upload manga, manhwa, or manhua panels. Our AI translates the speech bubbles to English
-          and gives you 3 variations to choose from.
-        </p>
-      </div>
+    <div className="flex flex-col min-h-screen">
+      <Navbar quota={quota} />
 
-      {/* Header ad */}
-      <AdUnit slot={headerSlot} format="horizontal" className="h-[90px] w-full" />
+      <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-10 space-y-10">
+        {/* Hero */}
+        <div className="text-center space-y-4 pt-2">
+          <div className="inline-flex items-center gap-2 bg-accent-50 border border-accent-100 text-accent-700 text-xs font-semibold px-3 py-1 rounded-full">
+            Japanese · Korean · Chinese
+          </div>
+          <h1 className="text-5xl sm:text-6xl font-black tracking-tight text-gray-900 leading-none">
+            Translate your<br />
+            <span className="text-accent-600">manga panels</span>
+          </h1>
+          <p className="text-gray-500 text-lg max-w-md mx-auto leading-relaxed">
+            Drop in your panels. Get 3 English translation options. Pick the best one and download.
+          </p>
+        </div>
 
-      {/* Upload zone */}
-      <section className="max-w-2xl mx-auto">
-        <UploadZone onSubmit={handleSubmit} disabled={isProcessing} />
-      </section>
+        {/* Header ad */}
+        <AdUnit slot={headerSlot} format="horizontal" className="h-[90px] w-full rounded-xl overflow-hidden" />
 
-      {/* Processing queue */}
-      {queue.length > 0 && (
-        <section className="max-w-2xl mx-auto space-y-3">
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">
-            Processing
-          </h2>
-          {queue
-            .filter((img) => img.status !== 'done')
-            .map((img) => (
+        {/* Upload zone */}
+        <section className="max-w-xl mx-auto">
+          <UploadZone
+            onSubmit={handleSubmit}
+            disabled={isProcessing}
+            quotaExhausted={quotaExhausted}
+          />
+        </section>
+
+        {/* Processing queue */}
+        {inProgressItems.length > 0 && (
+          <section className="max-w-xl mx-auto space-y-2">
+            {inProgressItems.map((img) => (
               <ProgressBar
                 key={img.imageId}
                 fileName={img.originalFileName}
@@ -146,32 +180,37 @@ export default function HomePage() {
                 errorMessage={img.errorMessage}
               />
             ))}
-        </section>
-      )}
+          </section>
+        )}
 
-      {/* Results */}
-      {queue.some((img) => img.status === 'done') && (
-        <section className="space-y-6">
-          <h2 className="text-xl font-bold">Results</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {queue
-              .filter((img) => img.status === 'done')
-              .map((img) => (
+        {/* Results */}
+        {doneResults.length > 0 && (
+          <section className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">Results</h2>
+              <span className="text-sm text-gray-400">{doneResults.length} panel{doneResults.length !== 1 ? 's' : ''} translated</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {doneResults.map((img) => (
                 <ImageResultCard key={img.imageId} result={img} />
               ))}
-          </div>
+            </div>
 
-          {/* Mid-page ad after results */}
-          <AdUnit slot={sidebarSlot} format="rectangle" className="h-[250px] w-full max-w-sm mx-auto" />
-        </section>
-      )}
+            <AdUnit
+              slot={sidebarSlot}
+              format="rectangle"
+              className="h-[250px] w-full max-w-sm mx-auto rounded-xl overflow-hidden"
+            />
+          </section>
+        )}
 
-      {/* Empty state hint */}
-      {queue.length === 0 && (
-        <div className="text-center text-gray-600 text-sm py-4">
-          Supported: Japanese manga, Korean manhwa, Chinese manhua
-        </div>
-      )}
+        {/* Empty state */}
+        {queue.length === 0 && (
+          <p className="text-center text-gray-400 text-sm">
+            Each panel generates 3 translations — pick whichever reads best.
+          </p>
+        )}
+      </main>
     </div>
   );
 }

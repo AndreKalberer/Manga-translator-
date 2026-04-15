@@ -22,17 +22,16 @@ export default function AdUnit({ slot, format = 'auto', className = '' }: AdUnit
     try {
       (window.adsbygoogle = window.adsbygoogle || []).push({});
     } catch {
-      // AdSense not loaded yet — ignore
+      // AdSense not loaded yet
     }
   }, [clientId]);
 
   if (!clientId) {
-    // Dev placeholder so layout is visible without real AdSense credentials
     return (
       <div
-        className={`flex items-center justify-center bg-gray-800 border border-dashed border-gray-600 rounded text-gray-500 text-xs ${className}`}
+        className={`flex items-center justify-center bg-gray-50 border border-dashed border-gray-200 rounded-xl text-gray-400 text-xs ${className}`}
       >
-        Ad slot {slot}
+        Ad · {slot}
       </div>
     );
   }
