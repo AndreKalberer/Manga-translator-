@@ -1,8 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ['sharp'],
-  },
+  // Next.js 15: renamed from serverComponentsExternalPackages
+  serverExternalPackages: ['sharp'],
   headers: async () => [
     {
       source: '/(.*)',
