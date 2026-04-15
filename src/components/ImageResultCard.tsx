@@ -15,7 +15,12 @@ export default function ImageResultCard({ result }: ImageResultCardProps) {
   const handleDownload = () => {
     const link = document.createElement('a');
     link.href = selectedVariation.dataUrl;
-    const base = result.originalFileName.replace(/\.[^.]+$/, '');
+    // Strip the extension, then remove any characters that could form path traversal
+    // sequences (e.g. "../") before using the name as a download filename.
+    const base = result.originalFileName
+      .replace(/\.[^.]+$/, '')
+      .replace(/[^a-zA-Z0-9._\- ]/g, '_')
+      .slice(0, 100);
     link.download = `${base}_translated_v${selected + 1}.png`;
     link.click();
   };

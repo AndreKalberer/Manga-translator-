@@ -10,7 +10,10 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const adsenseId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID;
+  // Validate the AdSense ID format before injecting it into a script URL.
+  // A publisher ID is always "ca-pub-" followed by exactly 16 digits.
+  const rawAdsenseId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID ?? '';
+  const adsenseId = /^ca-pub-\d{16}$/.test(rawAdsenseId) ? rawAdsenseId : null;
 
   return (
     <html lang="en">

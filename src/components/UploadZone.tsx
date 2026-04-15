@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { formatFileSize } from '@/lib/utils';
 
 interface UploadZoneProps {
@@ -10,11 +10,21 @@ interface UploadZoneProps {
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
+const MAX_FILE_COUNT = 10;
 
 export default function UploadZone({ onSubmit, disabled }: UploadZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  // Track object URLs so we can revoke them when files are removed or the component unmounts
+  const objectUrlsRef = useRef<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    return () => {
+      // Revoke all object URLs on unmount to prevent memory leaks
+      objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   const addFiles = useCallback((incoming: FileList | File[]) => {
     const valid = Array.from(incoming).filter(
@@ -22,12 +32,32 @@ export default function UploadZone({ onSubmit, disabled }: UploadZoneProps) {
     );
     setSelectedFiles((prev) => {
       const existing = new Set(prev.map((f) => f.name + f.size));
-      return [...prev, ...valid.filter((f) => !existing.has(f.name + f.size))];
+      const toAdd = valid.filter((f) => !existing.has(f.name + f.size));
+      const combined = [...prev, ...toAdd].slice(0, MAX_FILE_COUNT);
+      // Create object URLs for newly added files only
+      toAdd.slice(0, MAX_FILE_COUNT - prev.length).forEach((f) => {
+        const key = f.name + f.size;
+        if (!objectUrlsRef.current.has(key)) {
+          objectUrlsRef.current.set(key, URL.createObjectURL(f));
+        }
+      });
+      return combined;
     });
   }, []);
 
   const removeFile = (index: number) => {
-    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    setSelectedFiles((prev) => {
+      const file = prev[index];
+      if (file) {
+        const key = file.name + file.size;
+        const url = objectUrlsRef.current.get(key);
+        if (url) {
+          URL.revokeObjectURL(url);
+          objectUrlsRef.current.delete(key);
+        }
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -84,7 +114,7 @@ export default function UploadZone({ onSubmit, disabled }: UploadZoneProps) {
             >
               <div className="flex items-center gap-3 min-w-0">
                 <img
-                  src={URL.createObjectURL(file)}
+                  src={objectUrlsRef.current.get(file.name + file.size) ?? ''}
                   alt=""
                   className="w-10 h-10 object-cover rounded flex-shrink-0"
                 />
