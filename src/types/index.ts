@@ -1,3 +1,5 @@
+export type Mode = 'translate' | 'color' | 'both';
+
 export interface ImageVariation {
   index: number;
   dataUrl: string;
@@ -10,6 +12,7 @@ export interface ProcessedImage {
   variations: ImageVariation[];
   selectedIndex: number;
   status: 'pending' | 'rendering' | 'done' | 'error';
+  mode: Mode;
   errorMessage?: string;
 }
 

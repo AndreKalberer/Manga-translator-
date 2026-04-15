@@ -5,9 +5,10 @@ import { ProcessedImage } from '@/types';
 
 interface ImageResultCardProps {
   result: ProcessedImage;
+  modeLabel?: string;
 }
 
-export default function ImageResultCard({ result }: ImageResultCardProps) {
+export default function ImageResultCard({ result, modeLabel }: ImageResultCardProps) {
   const [selected, setSelected] = useState(0);
 
   const selectedVariation = result.variations[selected];
@@ -27,7 +28,14 @@ export default function ImageResultCard({ result }: ImageResultCardProps) {
     <div className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-3">
-        <p className="text-sm text-gray-700 font-medium truncate">{result.originalFileName}</p>
+        <div className="flex items-center gap-2 min-w-0">
+          <p className="text-sm text-gray-700 font-medium truncate">{result.originalFileName}</p>
+          {modeLabel && (
+            <span className="flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded-full">
+              {modeLabel}
+            </span>
+          )}
+        </div>
         <button
           onClick={handleDownload}
           className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-gray-700 text-white text-xs font-semibold transition-colors"

@@ -1,10 +1,12 @@
 import { NextRequest } from 'next/server';
 import sharp from 'sharp';
-import { renderTranslatedVariations } from '@/lib/render';
+import { renderPanel } from '@/lib/render';
 import { checkAndConsume, DAILY_LIMIT } from '@/lib/quota';
+import type { Mode } from '@/types';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 const MAX_WIDTH = 1500;
+const VALID_MODES: Mode[] = ['translate', 'color', 'both'];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -21,7 +23,7 @@ function safeErrorMessage(err: unknown): string {
     if (status === 413) return 'Image is too large for the translation service.';
     if (status && status >= 500) return 'The translation service is temporarily unavailable.';
   }
-  return 'Translation failed. Please try again.';
+  return 'Processing failed. Please try again.';
 }
 
 function getClientIp(request: NextRequest): string {
@@ -38,30 +40,53 @@ function getClientIp(request: NextRequest): string {
 export async function POST(request: NextRequest) {
   if (!process.env.OPENAI_API_KEY) {
     return new Response(
-      JSON.stringify({ error: 'Translation service is not configured.' }),
+      JSON.stringify({ error: 'Service is not configured.' }),
       { status: 503, headers: { 'Content-Type': 'application/json' } }
     );
   }
 
   const ip = getClientIp(request);
-  const quota = checkAndConsume(ip);
 
-  if (!quota.allowed) {
-    const message =
-      quota.reason === 'daily'
-        ? `You've used all ${DAILY_LIMIT} free translations for today. Come back tomorrow!`
-        : 'Too many requests. Please wait a moment and try again.';
-    return new Response(
-      JSON.stringify({ error: message, remaining: quota.remaining, resetAt: quota.resetAt }),
-      { status: 429, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
+  // Body size guard before reading
   const contentLength = request.headers.get('content-length');
   if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE + 8192) {
     return new Response(
       JSON.stringify({ error: 'Request body too large.' }),
       { status: 413, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Parse form data first so we can read the mode before consuming quota
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return new Response(
+      JSON.stringify({ error: 'Invalid request body.' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Validate mode
+  const rawMode = formData.get('mode');
+  const mode: Mode = VALID_MODES.includes(rawMode as Mode)
+    ? (rawMode as Mode)
+    : 'translate';
+
+  const cost: 1 | 2 = mode === 'both' ? 2 : 1;
+
+  // Consume quota
+  const quota = checkAndConsume(ip, cost);
+  if (!quota.allowed) {
+    const message =
+      quota.reason === 'daily'
+        ? quota.remaining < cost
+          ? `Not enough uses remaining. "${mode}" costs ${cost} uses but you only have ${quota.remaining} left today.`
+          : `You've used all ${DAILY_LIMIT} free uses for today. Come back tomorrow!`
+        : 'Too many requests. Please wait a moment and try again.';
+    return new Response(
+      JSON.stringify({ error: message, remaining: quota.remaining, resetAt: quota.resetAt }),
+      { status: 429, headers: { 'Content-Type': 'application/json' } }
     );
   }
 
@@ -73,7 +98,6 @@ export async function POST(request: NextRequest) {
 
   (async () => {
     try {
-      const formData = await request.formData();
       const file = formData.get('image');
 
       if (!(file instanceof File)) {
@@ -87,14 +111,13 @@ export async function POST(request: NextRequest) {
       }
 
       if (file.size > MAX_FILE_SIZE) {
-        await writer.write(
-          sseEvent({ step: 'error', message: 'Image exceeds the 20 MB size limit.' })
-        );
+        await writer.write(sseEvent({ step: 'error', message: 'Image exceeds the 20 MB size limit.' }));
         return;
       }
 
-      await writer.write(sseEvent({ step: 'rendering' }));
+      await writer.write(sseEvent({ step: 'rendering', mode }));
 
+      // Convert to PNG (sharp also validates the image — rejects non-images)
       const arrayBuffer = await file.arrayBuffer();
       const pngBuffer = await sharp(Buffer.from(arrayBuffer))
         .resize({ width: MAX_WIDTH, withoutEnlargement: true })
@@ -106,7 +129,7 @@ export async function POST(request: NextRequest) {
       const originalBase64 = pngBuffer.toString('base64');
       const originalDataUrl = `data:image/png;base64,${originalBase64}`;
 
-      const variationBase64s = await renderTranslatedVariations(pngBuffer, abortController.signal);
+      const variationBase64s = await renderPanel(pngBuffer, mode, abortController.signal);
 
       if (abortController.signal.aborted) return;
 
@@ -124,7 +147,7 @@ export async function POST(request: NextRequest) {
           originalFileName: safeFileName,
           originalDataUrl,
           variations,
-          // Let the client update its quota display
+          mode,
           remaining: quota.remaining,
           resetAt: quota.resetAt,
         })
@@ -133,11 +156,7 @@ export async function POST(request: NextRequest) {
       if (abortController.signal.aborted) return;
       await writer.write(sseEvent({ step: 'error', message: safeErrorMessage(err) }));
     } finally {
-      try {
-        await writer.close();
-      } catch {
-        // already closed
-      }
+      try { await writer.close(); } catch { /* already closed */ }
     }
   })();
 

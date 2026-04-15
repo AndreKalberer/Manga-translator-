@@ -2,7 +2,7 @@
 // Daily quota system (in-memory, resets at midnight UTC)
 // ---------------------------------------------------------------------------
 
-export const DAILY_LIMIT = 5;
+export const DAILY_LIMIT = 10;
 
 // Per-minute burst guard
 const BURST_MAX = 10;
@@ -27,8 +27,11 @@ function getResetAt(): string {
   return tomorrow.toISOString();
 }
 
-/** Consume one quota unit. Returns whether the request is allowed and the updated state. */
-export function checkAndConsume(ip: string): {
+/** Consume `cost` quota units. Returns whether the request is allowed and the updated state. */
+export function checkAndConsume(
+  ip: string,
+  cost: 1 | 2 = 1
+): {
   allowed: boolean;
   reason?: 'burst' | 'daily';
   remaining: number;
@@ -39,8 +42,8 @@ export function checkAndConsume(ip: string): {
   const entry = quotaMap.get(ip);
 
   if (!entry || entry.dayKey !== today) {
-    quotaMap.set(ip, { dayKey: today, used: 1, burstCount: 1, burstWindowStart: now });
-    return { allowed: true, remaining: DAILY_LIMIT - 1, resetAt: getResetAt() };
+    quotaMap.set(ip, { dayKey: today, used: cost, burstCount: 1, burstWindowStart: now });
+    return { allowed: true, remaining: DAILY_LIMIT - cost, resetAt: getResetAt() };
   }
 
   // Burst check
@@ -49,15 +52,20 @@ export function checkAndConsume(ip: string): {
     entry.burstWindowStart = now;
   }
   if (entry.burstCount >= BURST_MAX) {
-    return { allowed: false, reason: 'burst', remaining: DAILY_LIMIT - entry.used, resetAt: getResetAt() };
+    return {
+      allowed: false,
+      reason: 'burst',
+      remaining: Math.max(0, DAILY_LIMIT - entry.used),
+      resetAt: getResetAt(),
+    };
   }
 
-  // Daily check
-  if (entry.used >= DAILY_LIMIT) {
-    return { allowed: false, reason: 'daily', remaining: 0, resetAt: getResetAt() };
+  // Daily check — ensure there are enough uses left for the cost
+  if (entry.used + cost > DAILY_LIMIT) {
+    return { allowed: false, reason: 'daily', remaining: Math.max(0, DAILY_LIMIT - entry.used), resetAt: getResetAt() };
   }
 
-  entry.used += 1;
+  entry.used += cost;
   entry.burstCount += 1;
   return { allowed: true, remaining: DAILY_LIMIT - entry.used, resetAt: getResetAt() };
 }

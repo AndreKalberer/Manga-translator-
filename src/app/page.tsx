@@ -6,14 +6,21 @@ import UploadZone from '@/components/UploadZone';
 import ImageResultCard from '@/components/ImageResultCard';
 import ProgressBar from '@/components/ProgressBar';
 import AdUnit from '@/components/AdUnit';
-import { ProcessedImage, QuotaInfo } from '@/types';
+import { ProcessedImage, QuotaInfo, Mode } from '@/types';
 
 type AppStatus = 'idle' | 'processing' | 'done';
+
+const MODE_LABELS: Record<Mode, string> = {
+  translate: 'Translation',
+  color: 'Colorization',
+  both: 'Translation + Color',
+};
 
 export default function HomePage() {
   const [status, setStatus] = useState<AppStatus>('idle');
   const [queue, setQueue] = useState<ProcessedImage[]>([]);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
+  const [mode, setMode] = useState<Mode>('translate');
 
   // Fetch quota on mount
   useEffect(() => {
@@ -29,9 +36,10 @@ export default function HomePage() {
     );
   }, []);
 
-  const processFile = async (file: File, imageId: string): Promise<void> => {
+  const processFile = async (file: File, imageId: string, fileMode: Mode): Promise<void> => {
     const formData = new FormData();
     formData.append('image', file);
+    formData.append('mode', fileMode);
 
     const response = await fetch('/api/translate', { method: 'POST', body: formData });
 
@@ -41,17 +49,12 @@ export default function HomePage() {
       try {
         const parsed = JSON.parse(text);
         message = parsed.error ?? message;
-        // Update quota from 429 response
         if (response.status === 429 && parsed.remaining !== undefined) {
           setQuota((prev) =>
-            prev
-              ? { ...prev, remaining: parsed.remaining, resetAt: parsed.resetAt }
-              : null
+            prev ? { ...prev, remaining: parsed.remaining, resetAt: parsed.resetAt } : null
           );
         }
-      } catch {
-        // plain text
-      }
+      } catch { /* plain text */ }
       updateImage(imageId, { status: 'error', errorMessage: message });
       return;
     }
@@ -74,11 +77,7 @@ export default function HomePage() {
         if (!raw) continue;
 
         let event: Record<string, unknown>;
-        try {
-          event = JSON.parse(raw);
-        } catch {
-          continue;
-        }
+        try { event = JSON.parse(raw); } catch { continue; }
 
         const step = event.step as string;
 
@@ -91,7 +90,6 @@ export default function HomePage() {
             variations: event.variations as ProcessedImage['variations'],
             selectedIndex: 0,
           });
-          // Update quota display from server response
           if (event.remaining !== undefined) {
             setQuota((prev) =>
               prev
@@ -110,6 +108,7 @@ export default function HomePage() {
   };
 
   const handleSubmit = async (files: File[]) => {
+    const currentMode = mode;
     const entries: ProcessedImage[] = files.map((file) => ({
       imageId: crypto.randomUUID(),
       originalFileName: file.name,
@@ -117,13 +116,14 @@ export default function HomePage() {
       variations: [],
       selectedIndex: 0,
       status: 'pending',
+      mode: currentMode,
     }));
 
     setQueue((prev) => [...prev, ...entries]);
     setStatus('processing');
 
     for (let i = 0; i < files.length; i++) {
-      await processFile(files[i], entries[i].imageId);
+      await processFile(files[i], entries[i].imageId, currentMode);
     }
 
     setStatus('done');
@@ -149,11 +149,11 @@ export default function HomePage() {
             Japanese · Korean · Chinese
           </div>
           <h1 className="text-5xl sm:text-6xl font-black tracking-tight text-gray-900 leading-none">
-            Translate your<br />
-            <span className="text-accent-600">manga panels</span>
+            Translate &amp; colorize<br />
+            <span className="text-accent-600">your manga panels</span>
           </h1>
           <p className="text-gray-500 text-lg max-w-md mx-auto leading-relaxed">
-            Drop in your panels. Get 3 English translation options. Pick the best one and download.
+            Choose a mode, drop in your panels, and get 3 options to pick from.
           </p>
         </div>
 
@@ -164,8 +164,11 @@ export default function HomePage() {
         <section className="max-w-xl mx-auto">
           <UploadZone
             onSubmit={handleSubmit}
+            mode={mode}
+            onModeChange={setMode}
             disabled={isProcessing}
             quotaExhausted={quotaExhausted}
+            remaining={quota?.remaining}
           />
         </section>
 
@@ -188,11 +191,17 @@ export default function HomePage() {
           <section className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900">Results</h2>
-              <span className="text-sm text-gray-400">{doneResults.length} panel{doneResults.length !== 1 ? 's' : ''} translated</span>
+              <span className="text-sm text-gray-400">
+                {doneResults.length} panel{doneResults.length !== 1 ? 's' : ''} processed
+              </span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {doneResults.map((img) => (
-                <ImageResultCard key={img.imageId} result={img} />
+                <ImageResultCard
+                  key={img.imageId}
+                  result={img}
+                  modeLabel={MODE_LABELS[img.mode]}
+                />
               ))}
             </div>
 
@@ -204,10 +213,9 @@ export default function HomePage() {
           </section>
         )}
 
-        {/* Empty state */}
         {queue.length === 0 && (
           <p className="text-center text-gray-400 text-sm">
-            Each panel generates 3 translations — pick whichever reads best.
+            Each panel generates 3 options — pick whichever looks best.
           </p>
         )}
       </main>

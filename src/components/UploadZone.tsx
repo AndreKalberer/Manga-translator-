@@ -2,18 +2,36 @@
 
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { formatFileSize } from '@/lib/utils';
+import ModeSelector from './ModeSelector';
+import type { Mode } from '@/types';
 
 interface UploadZoneProps {
   onSubmit: (files: File[]) => void;
+  mode: Mode;
+  onModeChange: (mode: Mode) => void;
   disabled?: boolean;
   quotaExhausted?: boolean;
+  remaining?: number;
 }
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 const MAX_FILE_COUNT = 10;
 
-export default function UploadZone({ onSubmit, disabled, quotaExhausted }: UploadZoneProps) {
+const MODE_LABELS: Record<Mode, string> = {
+  translate: 'Translate',
+  color: 'Colorize',
+  both: 'Translate & Colorize',
+};
+
+export default function UploadZone({
+  onSubmit,
+  mode,
+  onModeChange,
+  disabled,
+  quotaExhausted,
+  remaining,
+}: UploadZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -74,14 +92,22 @@ export default function UploadZone({ onSubmit, disabled, quotaExhausted }: Uploa
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/* Mode selector */}
+      <ModeSelector
+        value={mode}
+        onChange={onModeChange}
+        disabled={disabled}
+        remaining={remaining}
+      />
+
       {/* Drop zone */}
       <div
         onClick={() => !isBlocked && inputRef.current?.click()}
         onDragOver={(e) => { e.preventDefault(); if (!isBlocked) setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
-        className={`relative border-2 border-dashed rounded-2xl p-12 text-center transition-all ${
+        className={`relative border-2 border-dashed rounded-2xl p-10 text-center transition-all ${
           isBlocked
             ? 'opacity-60 cursor-not-allowed border-gray-200 bg-gray-50'
             : dragging
@@ -99,13 +125,13 @@ export default function UploadZone({ onSubmit, disabled, quotaExhausted }: Uploa
           disabled={isBlocked}
         />
 
-        <div className="text-5xl mb-4 select-none">漫</div>
-        <p className="text-gray-900 font-semibold text-base">
+        <div className="text-4xl mb-3 select-none">漫</div>
+        <p className="text-gray-900 font-semibold text-sm">
           {quotaExhausted ? 'Daily limit reached' : 'Drop your manga panels here'}
         </p>
-        <p className="text-gray-400 text-sm mt-1">
+        <p className="text-gray-400 text-xs mt-1">
           {quotaExhausted
-            ? 'Come back tomorrow for more free translations'
+            ? 'Come back tomorrow for more free uses'
             : 'or click to browse · JPEG, PNG, WebP · max 20 MB'}
         </p>
       </div>
@@ -148,7 +174,7 @@ export default function UploadZone({ onSubmit, disabled, quotaExhausted }: Uploa
           disabled={isBlocked}
           className="w-full py-3 px-6 rounded-xl font-semibold bg-gray-900 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-white text-sm"
         >
-          Translate {selectedFiles.length} {selectedFiles.length === 1 ? 'panel' : 'panels'}
+          {MODE_LABELS[mode]} {selectedFiles.length} {selectedFiles.length === 1 ? 'panel' : 'panels'}
         </button>
       )}
     </div>
