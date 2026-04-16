@@ -4,7 +4,10 @@ import { renderPanel } from '@/lib/render';
 import { checkAndConsume, DAILY_LIMIT } from '@/lib/quota';
 import type { Mode } from '@/types';
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024;
+// Requires Vercel Pro plan; on Hobby the function is capped at 10s regardless.
+export const maxDuration = 60;
+
+const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const MAX_WIDTH = 1500;
 const VALID_MODES: Mode[] = ['translate', 'color', 'both'];
 
@@ -111,29 +114,35 @@ export async function POST(request: NextRequest) {
       }
 
       if (file.size > MAX_FILE_SIZE) {
-        await writer.write(sseEvent({ step: 'error', message: 'Image exceeds the 20 MB size limit.' }));
+        await writer.write(sseEvent({ step: 'error', message: 'Image exceeds the 4 MB size limit.' }));
         return;
       }
 
       await writer.write(sseEvent({ step: 'rendering', mode }));
 
       // Convert to PNG (sharp also validates the image — rejects non-images)
+      const SHARP_TIMEOUT_MS = 15_000;
       const arrayBuffer = await file.arrayBuffer();
-      const pngBuffer = await sharp(Buffer.from(arrayBuffer))
-        .resize({ width: MAX_WIDTH, withoutEnlargement: true })
-        .png()
-        .toBuffer();
+      const pngBuffer = await Promise.race([
+        sharp(Buffer.from(arrayBuffer))
+          .resize({ width: MAX_WIDTH, withoutEnlargement: true })
+          .png()
+          .toBuffer(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Image processing timed out.')), SHARP_TIMEOUT_MS)
+        ),
+      ]);
 
       if (abortController.signal.aborted) return;
 
       const originalBase64 = pngBuffer.toString('base64');
       const originalDataUrl = `data:image/png;base64,${originalBase64}`;
 
-      const RENDER_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+      const RENDER_TIMEOUT_MS = 55 * 1000; // stay under the 60s maxDuration ceiling
       const variationBase64s = await Promise.race([
         renderPanel(pngBuffer, mode, abortController.signal),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Render timed out after 3 minutes.')), RENDER_TIMEOUT_MS)
+          setTimeout(() => reject(new Error('Render timed out after 55 seconds.')), RENDER_TIMEOUT_MS)
         ),
       ]);
 
@@ -160,11 +169,13 @@ export async function POST(request: NextRequest) {
       );
     } catch (err) {
       if (abortController.signal.aborted) return;
-      await writer.write(sseEvent({ step: 'error', message: safeErrorMessage(err) }));
+      try {
+        await writer.write(sseEvent({ step: 'error', message: safeErrorMessage(err) }));
+      } catch { /* stream already closed — client disconnected */ }
     } finally {
       try { await writer.close(); } catch { /* already closed */ }
     }
-  })();
+  })().catch(() => { /* prevent unhandled rejection if the IIFE itself throws */ });
 
   return new Response(readable, {
     headers: {

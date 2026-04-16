@@ -11,7 +11,7 @@ const PROMPTS: Record<Mode, string> = {
     'Colorize this manga, manhwa, or manhua panel with vibrant, natural anime-style colors AND translate all speech bubble text, thought bubbles, and sound effects to natural English. Add rich color to all art elements (skin tones, hair, clothing, backgrounds) while replacing the original text with fluent English translations. Preserve panel composition and character designs.',
 };
 
-const MODEL = process.env.GEMINI_IMAGE_MODEL ?? 'gemini-3.1-flash-image-preview';
+const MODEL = process.env.GEMINI_IMAGE_MODEL ?? 'gemini-2.0-flash-preview-image-generation';
 
 async function generateVariation(
   base64: string,
@@ -40,7 +40,17 @@ async function generateVariation(
     )
   );
 
-  const parts = result.response.candidates?.[0]?.content?.parts ?? [];
+  const feedback = result.response.promptFeedback;
+  if (feedback?.blockReason) {
+    throw new Error(`Image blocked by safety filter: ${feedback.blockReason}`);
+  }
+
+  const candidate = result.response.candidates?.[0];
+  if (!candidate || candidate.finishReason === 'SAFETY') {
+    throw new Error('Image was blocked by Gemini safety filters.');
+  }
+
+  const parts = candidate.content?.parts ?? [];
   for (const part of parts) {
     if (part.inlineData?.data) return part.inlineData.data;
   }

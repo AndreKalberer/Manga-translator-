@@ -15,7 +15,7 @@ interface UploadZoneProps {
 }
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_FILE_SIZE = 20 * 1024 * 1024;
+const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const MAX_FILE_COUNT = 10;
 
 const MODE_LABELS: Record<Mode, string> = {
@@ -132,7 +132,7 @@ export default function UploadZone({
         <p className="text-gray-400 text-xs mt-1">
           {quotaExhausted
             ? 'Come back tomorrow for more free uses'
-            : 'or click to browse · JPEG, PNG, WebP · max 20 MB'}
+            : 'or click to browse · JPEG, PNG, WebP · max 4 MB'}
         </p>
       </div>
 
