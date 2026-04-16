@@ -21,6 +21,8 @@ function sseEvent(data: object): Uint8Array {
 function safeErrorMessage(err: unknown): string {
   if (err instanceof Error) {
     const status = (err as { status?: number }).status;
+    if (status === 401) return 'API key is invalid or missing. Check your GEMINI_API_KEY in Vercel.';
+    if (status === 403) return 'API access denied. This model requires a paid Gemini API plan — check billing at aistudio.google.com.';
     if (status === 429) return 'The translation service is busy. Please try again in a moment.';
     if (status === 400) return 'The image could not be processed. Please try a different file.';
     if (status === 413) return 'Image is too large for the translation service.';
@@ -168,6 +170,7 @@ export async function POST(request: NextRequest) {
         })
       );
     } catch (err) {
+      console.error('[/api/translate] processing error:', err);
       if (abortController.signal.aborted) return;
       try {
         await writer.write(sseEvent({ step: 'error', message: safeErrorMessage(err) }));
