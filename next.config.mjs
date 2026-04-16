@@ -24,7 +24,7 @@ const nextConfig = {
           key: 'Content-Security-Policy',
           value: [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://pagead2.googlesyndication.com https://www.googletagservices.com",
+            "script-src 'self' 'unsafe-inline' https://pagead2.googlesyndication.com https://www.googletagservices.com",
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: blob: https:",
             "connect-src 'self'",

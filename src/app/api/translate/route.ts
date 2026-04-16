@@ -38,7 +38,7 @@ function getClientIp(request: NextRequest): string {
 // Route handler
 // ---------------------------------------------------------------------------
 export async function POST(request: NextRequest) {
-  if (!process.env.OPENAI_API_KEY) {
+  if (!process.env.GEMINI_API_KEY) {
     return new Response(
       JSON.stringify({ error: 'Service is not configured.' }),
       { status: 503, headers: { 'Content-Type': 'application/json' } }
@@ -129,7 +129,13 @@ export async function POST(request: NextRequest) {
       const originalBase64 = pngBuffer.toString('base64');
       const originalDataUrl = `data:image/png;base64,${originalBase64}`;
 
-      const variationBase64s = await renderPanel(pngBuffer, mode, abortController.signal);
+      const RENDER_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+      const variationBase64s = await Promise.race([
+        renderPanel(pngBuffer, mode, abortController.signal),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Render timed out after 3 minutes.')), RENDER_TIMEOUT_MS)
+        ),
+      ]);
 
       if (abortController.signal.aborted) return;
 

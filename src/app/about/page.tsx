@@ -40,8 +40,8 @@ export default function AboutPage() {
         <section className="space-y-3 text-gray-600 leading-relaxed">
           <h2 className="text-lg font-bold text-gray-900">Daily limit</h2>
           <p>
-            To keep the service free for everyone, each visitor can translate up to 5 panels per
-            day. The count resets at midnight UTC.
+            To keep the service free for everyone, each visitor gets 10 free uses per day (the
+            &ldquo;Both&rdquo; mode costs 2 uses). The count resets at midnight UTC.
           </p>
         </section>
 

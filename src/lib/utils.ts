@@ -15,6 +15,9 @@ export async function withRetry<T>(
       return await fn();
     } catch (err) {
       lastError = err;
+      // Don't retry auth failures — they won't resolve on their own
+      const status = (err as { status?: number })?.status;
+      if (status === 401 || status === 403) throw err;
       if (attempt < maxAttempts) {
         await new Promise((res) => setTimeout(res, baseDelayMs * attempt));
       }
