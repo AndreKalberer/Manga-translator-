@@ -5,19 +5,18 @@ import type { Mode } from '@/types';
 
 const PROMPTS: Record<Mode, string> = {
   translate:
-    'This is a manga, manhwa, or manhua panel. Translate all speech bubble text, thought bubble text, and sound effects to natural English. Preserve the original art style, bubble shapes, character designs, and panel layout exactly — only change the text content inside the bubbles. Keep the lettering style consistent with manga/comic book conventions.',
+    'Generate an edited version of this manga panel image. Replace all Japanese, Korean, or Chinese text in speech bubbles, thought bubbles, and sound effects with natural English translations. Keep the art, bubble shapes, character designs, and panel layout pixel-identical — only the text inside the bubbles changes. Use lettering consistent with manga and comic book conventions. Output the edited image.',
   color:
-    'Colorize this manga, manhwa, or manhua panel with vibrant, natural anime-style colors. Add rich, appropriate color to skin tones, hair, clothing, eyes, and backgrounds. Preserve all line art, speech bubbles, panel composition, and character designs exactly. Do not change, translate, or remove any text.',
+    'Generate a fully colorized version of this black-and-white manga panel image. Add vibrant, natural anime-style colors to skin tones, hair, clothing, eyes, and backgrounds. Preserve all line art, speech bubbles, panel composition, and existing text exactly — do not change, translate, or remove any text. Output the colorized image.',
   both:
-    'Colorize this manga, manhwa, or manhua panel with vibrant, natural anime-style colors AND translate all speech bubble text, thought bubbles, and sound effects to natural English. Add rich color to all art elements (skin tones, hair, clothing, backgrounds) while replacing the original text with fluent English translations. Preserve panel composition and character designs.',
+    'Generate an edited version of this manga panel image with two changes: (1) colorize it with vibrant, natural anime-style colors on all art elements (skin tones, hair, clothing, eyes, backgrounds), and (2) replace all non-English text in speech bubbles, thought bubbles, and sound effects with natural English translations inside the original bubbles. Preserve panel composition, bubble shapes, and character designs. Output the edited image.',
 };
 
 const MODEL = process.env.GEMINI_IMAGE_MODEL ?? 'gemini-3.1-flash-image-preview';
 
-async function generateVariation(
-  base64: string,
-  prompt: string,
-): Promise<string> {
+type CallResult = { image: string } | { noImageError: string };
+
+async function callGemini(base64: string, prompt: string): Promise<CallResult> {
   const ai = getGeminiClient();
 
   console.log(`[render] calling generateContent — model=${MODEL}`);
@@ -39,7 +38,6 @@ async function generateVariation(
     })
   );
 
-  // Log the full response shape for debugging
   const debugShape = {
     promptFeedback: response.promptFeedback,
     candidateCount: response.candidates?.length ?? 0,
@@ -69,12 +67,27 @@ async function generateVariation(
 
   const parts = candidate.content?.parts ?? [];
   for (const part of parts) {
-    if (part.inlineData?.data) return part.inlineData.data;
+    if (part.inlineData?.data) return { image: part.inlineData.data };
   }
-  throw new Error(
-    `Gemini returned no image. finishReason=${candidate.finishReason ?? 'none'} parts=${parts.length} ` +
-    `partTypes=${parts.map((p) => (p.inlineData ? `inlineData(${p.inlineData.mimeType})` : 'text')).join(',')}`
-  );
+  return {
+    noImageError:
+      `Gemini returned no image. finishReason=${candidate.finishReason ?? 'none'} parts=${parts.length} ` +
+      `partTypes=${parts.map((p) => (p.inlineData ? `inlineData(${p.inlineData.mimeType})` : 'text')).join(',')}`,
+  };
+}
+
+async function generateVariation(base64: string, prompt: string): Promise<string> {
+  const first = await callGemini(base64, prompt);
+  if ('image' in first) return first.image;
+
+  // Gemini occasionally responds with a text description instead of an image.
+  // Retry once with an explicit instruction before giving up.
+  console.log('[render] no image on first attempt, retrying with stronger prompt');
+  const stronger = `IMPORTANT: Respond with an image, not a text description. ${prompt}`;
+  const second = await callGemini(base64, stronger);
+  if ('image' in second) return second.image;
+
+  throw new Error(second.noImageError);
 }
 
 export async function renderPanel(
