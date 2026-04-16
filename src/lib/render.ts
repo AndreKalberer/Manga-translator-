@@ -18,7 +18,7 @@ export async function renderPanel(
   signal?: AbortSignal
 ): Promise<string[]> {
   const client = getOpenAIClient();
-  const model = process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-1';
+  const model = process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-1.5';
 
   const imageFile = await toFile(pngBuffer, 'panel.png', { type: 'image/png' });
 
