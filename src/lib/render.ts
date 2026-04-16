@@ -35,7 +35,7 @@ async function generateVariation(
           },
         ],
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        generationConfig: { responseModalities: ['IMAGE'] } as any,
+        generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } as any,
       },
       { signal }
     )
