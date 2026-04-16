@@ -21,6 +21,7 @@ async function generateVariation(
   const genAI = getGeminiClient();
   const model = genAI.getGenerativeModel({ model: MODEL });
 
+  console.log(`[render] calling generateContent — model=${MODEL}`);
   const result = await withRetry(() =>
     model.generateContent(
       {
@@ -40,6 +41,24 @@ async function generateVariation(
     )
   );
 
+  // Log the full response shape so we can see exactly what Gemini returned
+  const debugShape = {
+    promptFeedback: result.response.promptFeedback,
+    candidateCount: result.response.candidates?.length ?? 0,
+    candidates: result.response.candidates?.map((c) => ({
+      finishReason: c.finishReason,
+      partCount: c.content?.parts?.length ?? 0,
+      parts: c.content?.parts?.map((p) => ({
+        hasText: !!p.text,
+        textSnippet: p.text?.slice(0, 80),
+        hasInlineData: !!p.inlineData,
+        mimeType: p.inlineData?.mimeType ?? null,
+        dataLength: p.inlineData?.data?.length ?? 0,
+      })),
+    })),
+  };
+  console.log('[render] Gemini response shape:', JSON.stringify(debugShape));
+
   const feedback = result.response.promptFeedback;
   if (feedback?.blockReason) {
     throw new Error(`Image blocked by safety filter: ${feedback.blockReason}`);
@@ -54,7 +73,10 @@ async function generateVariation(
   for (const part of parts) {
     if (part.inlineData?.data) return part.inlineData.data;
   }
-  throw new Error('Gemini returned no image in its response');
+  throw new Error(
+    `Gemini returned no image. finishReason=${candidate.finishReason ?? 'none'} parts=${parts.length} ` +
+    `partTypes=${parts.map((p) => (p.inlineData ? `inlineData(${p.inlineData.mimeType})` : 'text')).join(',')}`
+  );
 }
 
 export async function renderPanel(
@@ -69,6 +91,7 @@ export async function renderPanel(
   const results: string[] = [];
   for (let i = 0; i < 3; i++) {
     if (signal?.aborted) break;
+    console.log(`[render] variation ${i + 1}/3`);
     results.push(await generateVariation(base64, prompt, signal));
   }
   return results;

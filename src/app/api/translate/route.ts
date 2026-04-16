@@ -20,15 +20,18 @@ function sseEvent(data: object): Uint8Array {
 
 function safeErrorMessage(err: unknown): string {
   if (err instanceof Error) {
-    const status = (err as { status?: number }).status;
-    if (status === 401) return 'API key is invalid or missing. Check your GEMINI_API_KEY in Vercel.';
-    if (status === 403) return 'API access denied. This model requires a paid Gemini API plan — check billing at aistudio.google.com.';
-    if (status === 429) return 'The translation service is busy. Please try again in a moment.';
-    if (status === 400) return 'The image could not be processed. Please try a different file.';
-    if (status === 413) return 'Image is too large for the translation service.';
-    if (status && status >= 500) return 'The translation service is temporarily unavailable.';
+    const e = err as { status?: number; statusText?: string; message: string };
+    const status = e.status;
+    if (status === 401) return `[401] API key invalid or missing — check GEMINI_API_KEY in Vercel dashboard.`;
+    if (status === 403) return `[403] API access denied — this model requires a paid Gemini API plan. Check billing at aistudio.google.com.`;
+    if (status === 429) return `[429] Rate limited — the translation service is busy. Please wait and try again.`;
+    if (status === 400) return `[400] Bad request — ${e.message}`;
+    if (status === 413) return `[413] Payload too large — ${e.message}`;
+    if (status) return `[${status}] ${e.message}`;
+    // No HTTP status — surface the raw message so we can see what's actually failing
+    return `Error: ${e.message}`;
   }
-  return 'Processing failed. Please try again.';
+  return `Processing failed: ${String(err)}`;
 }
 
 function getClientIp(request: NextRequest): string {
@@ -120,11 +123,13 @@ export async function POST(request: NextRequest) {
         return;
       }
 
+      console.log(`[translate] start — file=${file.name} size=${file.size} type=${file.type} mode=${mode}`);
       await writer.write(sseEvent({ step: 'rendering', mode }));
 
       // Convert to PNG (sharp also validates the image — rejects non-images)
       const SHARP_TIMEOUT_MS = 15_000;
       const arrayBuffer = await file.arrayBuffer();
+      console.log('[translate] running sharp...');
       const pngBuffer = await Promise.race([
         sharp(Buffer.from(arrayBuffer))
           .resize({ width: MAX_WIDTH, withoutEnlargement: true })
@@ -134,12 +139,14 @@ export async function POST(request: NextRequest) {
           setTimeout(() => reject(new Error('Image processing timed out.')), SHARP_TIMEOUT_MS)
         ),
       ]);
+      console.log(`[translate] sharp done — output ${pngBuffer.length} bytes`);
 
       if (abortController.signal.aborted) return;
 
       const originalBase64 = pngBuffer.toString('base64');
       const originalDataUrl = `data:image/png;base64,${originalBase64}`;
 
+      console.log('[translate] calling renderPanel...');
       const RENDER_TIMEOUT_MS = 55 * 1000; // stay under the 60s maxDuration ceiling
       const variationBase64s = await Promise.race([
         renderPanel(pngBuffer, mode, abortController.signal),
@@ -147,6 +154,7 @@ export async function POST(request: NextRequest) {
           setTimeout(() => reject(new Error('Render timed out after 55 seconds.')), RENDER_TIMEOUT_MS)
         ),
       ]);
+      console.log(`[translate] renderPanel done — ${variationBase64s.length} variations`);
 
       if (abortController.signal.aborted) return;
 
