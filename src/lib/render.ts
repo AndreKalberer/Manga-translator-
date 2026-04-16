@@ -11,7 +11,7 @@ const PROMPTS: Record<Mode, string> = {
     'Colorize this manga, manhwa, or manhua panel with vibrant, natural anime-style colors AND translate all speech bubble text, thought bubbles, and sound effects to natural English. Add rich color to all art elements (skin tones, hair, clothing, backgrounds) while replacing the original text with fluent English translations. Preserve panel composition and character designs.',
 };
 
-const MODEL = process.env.GEMINI_IMAGE_MODEL ?? 'gemini-2.0-flash-preview-image-generation';
+const MODEL = process.env.GEMINI_IMAGE_MODEL ?? 'gemini-3-pro-image-preview';
 
 async function generateVariation(
   base64: string,
