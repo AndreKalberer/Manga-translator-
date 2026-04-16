@@ -19,7 +19,9 @@ export async function withRetry<T>(
       const status = (err as { status?: number })?.status;
       if (status === 401 || status === 403) throw err;
       if (attempt < maxAttempts) {
-        await new Promise((res) => setTimeout(res, baseDelayMs * attempt));
+        // Rate-limited: back off longer
+        const delay = status === 429 ? baseDelayMs * attempt * 3 : baseDelayMs * attempt;
+        await new Promise((res) => setTimeout(res, delay));
       }
     }
   }

@@ -54,9 +54,12 @@ export async function renderPanel(
 ): Promise<string[]> {
   const base64 = pngBuffer.toString('base64');
   const prompt = PROMPTS[mode];
-  return Promise.all([
-    generateVariation(base64, prompt, signal),
-    generateVariation(base64, prompt, signal),
-    generateVariation(base64, prompt, signal),
-  ]);
+
+  // Sequential rather than parallel — avoids bursting the Gemini rate limit
+  const results: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    if (signal?.aborted) break;
+    results.push(await generateVariation(base64, prompt, signal));
+  }
+  return results;
 }
