@@ -1,3 +1,4 @@
+import { Modality } from '@google/genai';
 import { getGeminiClient } from './gemini';
 import { withRetry } from './utils';
 import type { Mode } from '@/types';
@@ -16,36 +17,33 @@ const MODEL = process.env.GEMINI_IMAGE_MODEL ?? 'gemini-3.1-flash-image-preview'
 async function generateVariation(
   base64: string,
   prompt: string,
-  signal?: AbortSignal
 ): Promise<string> {
-  const genAI = getGeminiClient();
-  const model = genAI.getGenerativeModel({ model: MODEL });
+  const ai = getGeminiClient();
 
   console.log(`[render] calling generateContent — model=${MODEL}`);
-  const result = await withRetry(() =>
-    model.generateContent(
-      {
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { inlineData: { mimeType: 'image/png', data: base64 } },
-              { text: prompt },
-            ],
-          },
-        ],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        generationConfig: { responseModalities: ['TEXT', 'IMAGE'] } as any,
+  const response = await withRetry(() =>
+    ai.models.generateContent({
+      model: MODEL,
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { inlineData: { mimeType: 'image/png', data: base64 } },
+            { text: prompt },
+          ],
+        },
+      ],
+      config: {
+        responseModalities: [Modality.TEXT, Modality.IMAGE],
       },
-      { signal }
-    )
+    })
   );
 
-  // Log the full response shape so we can see exactly what Gemini returned
+  // Log the full response shape for debugging
   const debugShape = {
-    promptFeedback: result.response.promptFeedback,
-    candidateCount: result.response.candidates?.length ?? 0,
-    candidates: result.response.candidates?.map((c) => ({
+    promptFeedback: response.promptFeedback,
+    candidateCount: response.candidates?.length ?? 0,
+    candidates: response.candidates?.map((c) => ({
       finishReason: c.finishReason,
       partCount: c.content?.parts?.length ?? 0,
       parts: c.content?.parts?.map((p) => ({
@@ -59,12 +57,12 @@ async function generateVariation(
   };
   console.log('[render] Gemini response shape:', JSON.stringify(debugShape));
 
-  const feedback = result.response.promptFeedback;
+  const feedback = response.promptFeedback;
   if (feedback?.blockReason) {
     throw new Error(`Image blocked by safety filter: ${feedback.blockReason}`);
   }
 
-  const candidate = result.response.candidates?.[0];
+  const candidate = response.candidates?.[0];
   if (!candidate || candidate.finishReason === 'SAFETY') {
     throw new Error('Image was blocked by Gemini safety filters.');
   }
@@ -92,7 +90,7 @@ export async function renderPanel(
   for (let i = 0; i < 3; i++) {
     if (signal?.aborted) break;
     console.log(`[render] variation ${i + 1}/3`);
-    results.push(await generateVariation(base64, prompt, signal));
+    results.push(await generateVariation(base64, prompt));
   }
   return results;
 }
