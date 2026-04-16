@@ -31,7 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               &copy; {new Date().getFullYear()} MangaTranslate &mdash; images are never stored
             </p>
             <div className="flex items-center gap-4">
-              <span className="text-gray-300">Powered by GPT-image-1.5</span>
+              <span className="text-gray-300">Powered by Gemini</span>
               <a href="/about" className="hover:text-gray-600 transition-colors">About</a>
               <a href="/privacy" className="hover:text-gray-600 transition-colors">Privacy</a>
             </div>

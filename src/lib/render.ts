@@ -1,5 +1,4 @@
-import { toFile } from 'openai';
-import { getOpenAIClient } from './openai';
+import { getGeminiClient } from './gemini';
 import { withRetry } from './utils';
 import type { Mode } from '@/types';
 
@@ -12,31 +11,52 @@ const PROMPTS: Record<Mode, string> = {
     'Colorize this manga, manhwa, or manhua panel with vibrant, natural anime-style colors AND translate all speech bubble text, thought bubbles, and sound effects to natural English. Add rich color to all art elements (skin tones, hair, clothing, backgrounds) while replacing the original text with fluent English translations. Preserve panel composition and character designs.',
 };
 
-export async function renderPanel(
-  pngBuffer: Buffer,
-  mode: Mode,
+const MODEL = process.env.GEMINI_IMAGE_MODEL ?? 'gemini-2.0-flash-preview-image-generation';
+
+async function generateVariation(
+  base64: string,
+  prompt: string,
   signal?: AbortSignal
-): Promise<string[]> {
-  const client = getOpenAIClient();
-  const model = process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-1.5';
+): Promise<string> {
+  const genAI = getGeminiClient();
+  const model = genAI.getGenerativeModel({ model: MODEL });
 
-  const imageFile = await toFile(pngBuffer, 'panel.png', { type: 'image/png' });
-
-  const response = await withRetry(() =>
-    client.images.edit(
+  const result = await withRetry(() =>
+    model.generateContent(
       {
-        model,
-        image: imageFile,
-        prompt: PROMPTS[mode],
-        n: 3,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { inlineData: { mimeType: 'image/png', data: base64 } },
+              { text: prompt },
+            ],
+          },
+        ],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        generationConfig: { responseModalities: ['IMAGE'] } as any,
       },
       { signal }
     )
   );
 
-  const items = response.data ?? [];
-  return items.map((item) => {
-    if (!item.b64_json) throw new Error('Image generation returned no data');
-    return item.b64_json;
-  });
+  const parts = result.response.candidates?.[0]?.content?.parts ?? [];
+  for (const part of parts) {
+    if (part.inlineData?.data) return part.inlineData.data;
+  }
+  throw new Error('Gemini returned no image in its response');
+}
+
+export async function renderPanel(
+  pngBuffer: Buffer,
+  mode: Mode,
+  signal?: AbortSignal
+): Promise<string[]> {
+  const base64 = pngBuffer.toString('base64');
+  const prompt = PROMPTS[mode];
+  return Promise.all([
+    generateVariation(base64, prompt, signal),
+    generateVariation(base64, prompt, signal),
+    generateVariation(base64, prompt, signal),
+  ]);
 }
