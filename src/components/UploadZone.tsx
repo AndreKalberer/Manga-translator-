@@ -107,12 +107,12 @@ export default function UploadZone({
         onDragOver={(e) => { e.preventDefault(); if (!isBlocked) setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
-        className={`relative border-2 border-dashed rounded-2xl p-10 text-center transition-all ${
+        className={`relative rounded-2xl p-10 text-center transition-all border bg-gradient-to-br ${
           isBlocked
-            ? 'opacity-60 cursor-not-allowed border-gray-200 bg-gray-50'
+            ? 'opacity-60 cursor-not-allowed border-accent-100/60 from-white to-accent-50/40'
             : dragging
-              ? 'border-accent-400 bg-accent-50 cursor-copy'
-              : 'border-gray-200 hover:border-accent-300 hover:bg-gray-50 cursor-pointer'
+              ? 'cursor-copy border-accent-200 from-accent-50 to-accent-100/60 ring-2 ring-accent-300/70 shadow-[0_20px_50px_-20px_rgba(244,63,94,0.35)]'
+              : 'cursor-pointer border-accent-100/60 from-white to-accent-50/40 shadow-[0_10px_30px_-15px_rgba(244,63,94,0.15)] hover:shadow-[0_16px_40px_-15px_rgba(244,63,94,0.28)] hover:border-accent-200'
         }`}
       >
         <input
@@ -125,7 +125,13 @@ export default function UploadZone({
           disabled={isBlocked}
         />
 
-        <div className="text-4xl mb-3 select-none">漫</div>
+        <div className="mx-auto mb-4 w-14 h-14 rounded-full bg-white border border-accent-100 text-accent-500 flex items-center justify-center shadow-sm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+        </div>
         <p className="text-gray-900 font-semibold text-sm">
           {quotaExhausted ? 'Daily limit reached' : 'Drop your manga panels here'}
         </p>
