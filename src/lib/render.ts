@@ -12,7 +12,7 @@ const PROMPTS: Record<Mode, string> = {
     'Colorize this manga, manhwa, or manhua panel with vibrant, natural anime-style colors AND translate all speech bubble text, thought bubbles, and sound effects to natural English. Add rich color to all art elements (skin tones, hair, clothing, backgrounds) while replacing the original text with fluent English translations. Preserve panel composition and character designs.',
 };
 
-const MODEL = process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2-2026-04-21';
+const MODEL = process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-1.5';
 
 export async function renderPanel(
   pngBuffer: Buffer,

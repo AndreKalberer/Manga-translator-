@@ -11,7 +11,7 @@ export async function GET(_request: NextRequest) {
 
   const apiKey = process.env.OPENAI_API_KEY;
   const modelEnv = process.env.OPENAI_IMAGE_MODEL;
-  const model = modelEnv ?? 'gpt-image-2-2026-04-21';
+  const model = modelEnv ?? 'gpt-image-1.5';
   results.env = {
     OPENAI_API_KEY: apiKey ? `set (${apiKey.slice(0, 8)}...)` : 'MISSING',
     OPENAI_IMAGE_MODEL: modelEnv ?? '(not set — using fallback)',
