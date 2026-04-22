@@ -4,8 +4,8 @@ import { renderPanel } from '@/lib/render';
 import { checkAndConsume, DAILY_LIMIT } from '@/lib/quota';
 import type { Mode } from '@/types';
 
-// Requires Vercel Pro plan; on Hobby the function is capped at 10s regardless.
-export const maxDuration = 60;
+// Requires Vercel Pro plan (Pro caps at 300s; Hobby caps at 60s).
+export const maxDuration = 300;
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const MAX_WIDTH = 1500;
@@ -147,11 +147,11 @@ export async function POST(request: NextRequest) {
       const originalDataUrl = `data:image/png;base64,${originalBase64}`;
 
       console.log('[translate] calling renderPanel...');
-      const RENDER_TIMEOUT_MS = 55 * 1000; // stay under the 60s maxDuration ceiling
+      const RENDER_TIMEOUT_MS = 290 * 1000; // stay under the 300s maxDuration ceiling
       const variationBase64s = await Promise.race([
         renderPanel(pngBuffer, mode, abortController.signal),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Render timed out after 55 seconds.')), RENDER_TIMEOUT_MS)
+          setTimeout(() => reject(new Error('Render timed out after 290 seconds.')), RENDER_TIMEOUT_MS)
         ),
       ]);
       console.log(`[translate] renderPanel done — ${variationBase64s.length} variations`);
