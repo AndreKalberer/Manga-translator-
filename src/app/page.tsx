@@ -81,7 +81,9 @@ export default function HomePage() {
 
         const step = event.step as string;
 
-        if (step === 'rendering') {
+        if (step === 'analyzing') {
+          updateImage(imageId, { status: 'analyzing' });
+        } else if (step === 'rendering') {
           updateImage(imageId, { status: 'rendering' });
         } else if (step === 'done') {
           updateImage(imageId, {
@@ -89,6 +91,7 @@ export default function HomePage() {
             originalDataUrl: event.originalDataUrl as string,
             variations: event.variations as ProcessedImage['variations'],
             selectedIndex: 0,
+            analysis: event.analysis as ProcessedImage['analysis'],
           });
           if (event.remaining !== undefined) {
             setQuota((prev) =>

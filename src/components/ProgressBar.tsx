@@ -1,12 +1,13 @@
 interface ProgressBarProps {
   fileName: string;
-  status: 'pending' | 'rendering' | 'done' | 'error';
+  status: 'pending' | 'analyzing' | 'rendering' | 'done' | 'error';
   errorMessage?: string;
 }
 
 const steps: { key: string; label: string }[] = [
   { key: 'pending', label: 'Queued' },
-  { key: 'rendering', label: 'Translating' },
+  { key: 'analyzing', label: 'Reading text' },
+  { key: 'rendering', label: 'Rendering' },
   { key: 'done', label: 'Done' },
 ];
 

@@ -10,16 +10,21 @@ export async function GET(_request: NextRequest) {
   const results: Record<string, unknown> = {};
 
   const apiKey = process.env.OPENAI_API_KEY;
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const modelEnv = process.env.OPENAI_IMAGE_MODEL;
   const model = modelEnv ?? 'gpt-image-1.5';
   results.env = {
     OPENAI_API_KEY: apiKey ? `set (${apiKey.slice(0, 8)}...)` : 'MISSING',
+    ANTHROPIC_API_KEY: anthropicKey ? `set (${anthropicKey.slice(0, 11)}...)` : 'MISSING',
     OPENAI_IMAGE_MODEL: modelEnv ?? '(not set — using fallback)',
     effectiveModel: model,
   };
 
   if (!apiKey) {
     return Response.json({ ...results, error: 'OPENAI_API_KEY is not set in Vercel env vars' }, { status: 500 });
+  }
+  if (!anthropicKey) {
+    return Response.json({ ...results, error: 'ANTHROPIC_API_KEY is not set in Vercel env vars' }, { status: 500 });
   }
 
   const client = new OpenAI({ apiKey });

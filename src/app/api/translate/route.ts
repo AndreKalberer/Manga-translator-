@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server';
 import sharp from 'sharp';
 import { renderPanel } from '@/lib/render';
+import { translatePanel } from '@/lib/translator';
 import { checkAndConsume, DAILY_LIMIT } from '@/lib/quota';
-import type { Mode } from '@/types';
+import type { Mode, PanelAnalysis } from '@/types';
 
 // Requires Vercel Pro plan (Pro caps at 300s; Hobby caps at 60s).
 export const maxDuration = 300;
@@ -46,7 +47,7 @@ function getClientIp(request: NextRequest): string {
 // Route handler
 // ---------------------------------------------------------------------------
 export async function POST(request: NextRequest) {
-  if (!process.env.OPENAI_API_KEY) {
+  if (!process.env.OPENAI_API_KEY || !process.env.ANTHROPIC_API_KEY) {
     return new Response(
       JSON.stringify({ error: 'Service is not configured.' }),
       { status: 503, headers: { 'Content-Type': 'application/json' } }
@@ -124,7 +125,6 @@ export async function POST(request: NextRequest) {
       }
 
       console.log(`[translate] start — file=${file.name} size=${file.size} type=${file.type} mode=${mode}`);
-      await writer.write(sseEvent({ step: 'rendering', mode }));
 
       // Convert to PNG (sharp also validates the image — rejects non-images)
       const SHARP_TIMEOUT_MS = 15_000;
@@ -146,12 +146,30 @@ export async function POST(request: NextRequest) {
       const originalBase64 = pngBuffer.toString('base64');
       const originalDataUrl = `data:image/png;base64,${originalBase64}`;
 
+      // Stage 1 — LLM translation (skipped for color-only mode)
+      let analysis: PanelAnalysis | undefined;
+      if (mode !== 'color') {
+        await writer.write(sseEvent({ step: 'analyzing', mode }));
+        console.log('[translate] calling translatePanel...');
+        const ANALYZE_TIMEOUT_MS = 60 * 1000;
+        analysis = await Promise.race([
+          translatePanel(pngBuffer, abortController.signal),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Translation analysis timed out after 60 seconds.')), ANALYZE_TIMEOUT_MS)
+          ),
+        ]);
+        console.log(`[translate] translatePanel done — ${analysis.bubbles.length} bubbles`);
+        if (abortController.signal.aborted) return;
+      }
+
+      // Stage 2 — image render (colorize + letter the translations in)
+      await writer.write(sseEvent({ step: 'rendering', mode }));
       console.log('[translate] calling renderPanel...');
-      const RENDER_TIMEOUT_MS = 290 * 1000; // stay under the 300s maxDuration ceiling
+      const RENDER_TIMEOUT_MS = 230 * 1000; // leave headroom under the 300s maxDuration ceiling after the analyze step
       const variationBase64s = await Promise.race([
-        renderPanel(pngBuffer, mode, abortController.signal),
+        renderPanel(pngBuffer, mode, analysis, abortController.signal),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Render timed out after 290 seconds.')), RENDER_TIMEOUT_MS)
+          setTimeout(() => reject(new Error('Render timed out after 230 seconds.')), RENDER_TIMEOUT_MS)
         ),
       ]);
       console.log(`[translate] renderPanel done — ${variationBase64s.length} variations`);
@@ -173,6 +191,7 @@ export async function POST(request: NextRequest) {
           originalDataUrl,
           variations,
           mode,
+          analysis,
           remaining: quota.remaining,
           resetAt: quota.resetAt,
         })

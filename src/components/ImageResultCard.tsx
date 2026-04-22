@@ -103,6 +103,38 @@ export default function ImageResultCard({ result, modeLabel }: ImageResultCardPr
             className="w-full rounded-xl object-contain bg-gray-50"
           />
         </div>
+
+        {/* Transcript */}
+        {result.analysis && result.analysis.bubbles.length > 0 && (
+          <div>
+            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-widest mb-2">
+              Transcript
+            </p>
+            {result.analysis.sceneNotes && (
+              <p className="text-xs italic text-gray-500 mb-3">{result.analysis.sceneNotes}</p>
+            )}
+            <ol className="space-y-2.5">
+              {result.analysis.bubbles.map((bubble, i) => (
+                <li key={i} className="text-sm">
+                  <div className="flex items-baseline gap-2 mb-0.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0">
+                      {bubble.kind}
+                    </span>
+                    {bubble.speakerDescription && (
+                      <span className="text-[11px] text-gray-400 truncate">
+                        {bubble.speakerDescription}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-gray-900 leading-snug">{bubble.translatedText}</p>
+                  {bubble.originalText && bubble.originalText !== bubble.translatedText && (
+                    <p className="text-[11px] text-gray-400 mt-0.5">{bubble.originalText}</p>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
       </div>
     </div>
   );
