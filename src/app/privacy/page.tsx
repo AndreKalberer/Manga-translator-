@@ -21,7 +21,7 @@ export default function PrivacyPage() {
             MangaTranslate does not require registration and does not collect personal information.
           </p>
           <p>
-            When you upload an image, it is sent securely to the Google Gemini API for processing
+            When you upload an image, it is sent securely to the OpenAI API for processing
             and is not stored on our servers. We do not retain copies of your images or translated
             results.
           </p>
@@ -30,15 +30,15 @@ export default function PrivacyPage() {
         <section className="space-y-3 text-gray-600 leading-relaxed">
           <h2 className="text-lg font-bold text-gray-900">Third-party services</h2>
           <p>
-            <strong className="text-gray-900">Google Gemini API:</strong> Image data is sent to
-            Google Gemini for processing. See{' '}
+            <strong className="text-gray-900">OpenAI API:</strong> Image data is sent to
+            OpenAI for processing. See{' '}
             <a
-              href="https://policies.google.com/privacy"
+              href="https://openai.com/policies/privacy-policy"
               target="_blank"
               rel="noopener noreferrer"
               className="text-accent-600 hover:underline"
             >
-              Google&apos;s Privacy Policy
+              OpenAI&apos;s Privacy Policy
             </a>
             .
           </p>

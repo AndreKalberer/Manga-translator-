@@ -22,8 +22,8 @@ function safeErrorMessage(err: unknown): string {
   if (err instanceof Error) {
     const e = err as { status?: number; statusText?: string; message: string };
     const status = e.status;
-    if (status === 401) return `[401] API key invalid or missing — check GEMINI_API_KEY in Vercel dashboard.`;
-    if (status === 403) return `[403] API access denied — this model requires a paid Gemini API plan. Check billing at aistudio.google.com.`;
+    if (status === 401) return `[401] API key invalid or missing — check OPENAI_API_KEY in Vercel dashboard.`;
+    if (status === 403) return `[403] API access denied — this model requires a verified OpenAI org with billing enabled. Check https://platform.openai.com/settings/organization/billing.`;
     if (status === 429) return `[429] Rate limited — the translation service is busy. Please wait and try again.`;
     if (status === 400) return `[400] Bad request — ${e.message}`;
     if (status === 413) return `[413] Payload too large — ${e.message}`;
@@ -46,7 +46,7 @@ function getClientIp(request: NextRequest): string {
 // Route handler
 // ---------------------------------------------------------------------------
 export async function POST(request: NextRequest) {
-  if (!process.env.GEMINI_API_KEY) {
+  if (!process.env.OPENAI_API_KEY) {
     return new Response(
       JSON.stringify({ error: 'Service is not configured.' }),
       { status: 503, headers: { 'Content-Type': 'application/json' } }

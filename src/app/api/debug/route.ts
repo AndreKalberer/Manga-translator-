@@ -1,98 +1,63 @@
 import { NextRequest } from 'next/server';
-import { GoogleGenAI, Modality } from '@google/genai';
+import OpenAI, { toFile } from 'openai';
 
 // Tiny 1x1 white PNG — used to test image-in / image-out without a real upload
 const DUMMY_PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQ' +
   'AABjkB6QAAAABJRU5ErkJggg==';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   const results: Record<string, unknown> = {};
 
-  // 1. Check env vars
-  const apiKey = process.env.GEMINI_API_KEY;
-  const modelEnv = process.env.GEMINI_IMAGE_MODEL;
+  const apiKey = process.env.OPENAI_API_KEY;
+  const modelEnv = process.env.OPENAI_IMAGE_MODEL;
+  const model = modelEnv ?? 'gpt-image-2-2026-04-21';
   results.env = {
-    GEMINI_API_KEY: apiKey ? `set (${apiKey.slice(0, 8)}...)` : 'MISSING',
-    GEMINI_IMAGE_MODEL: modelEnv ?? '(not set — using fallback)',
-    effectiveModel: modelEnv ?? 'gemini-3.1-flash-image-preview',
+    OPENAI_API_KEY: apiKey ? `set (${apiKey.slice(0, 8)}...)` : 'MISSING',
+    OPENAI_IMAGE_MODEL: modelEnv ?? '(not set — using fallback)',
+    effectiveModel: model,
   };
 
   if (!apiKey) {
-    return Response.json({ ...results, error: 'GEMINI_API_KEY is not set in Vercel env vars' }, { status: 500 });
+    return Response.json({ ...results, error: 'OPENAI_API_KEY is not set in Vercel env vars' }, { status: 500 });
   }
 
-  const ai = new GoogleGenAI({ apiKey });
-  const model = modelEnv ?? 'gemini-3.1-flash-image-preview';
+  const client = new OpenAI({ apiKey });
 
-  // 2. Text-only ping — verifies the key and model name are valid
+  // Models list ping — verifies the key works and surfaces whether the image model is accessible
   try {
-    const textResponse = await ai.models.generateContent({
-      model,
-      contents: [{ role: 'user', parts: [{ text: 'Reply with just the word OK.' }] }],
-    });
-    results.textPing = {
+    const models = await client.models.list();
+    const names = models.data.map((m) => m.id);
+    results.modelsPing = {
       ok: true,
-      finishReason: textResponse.candidates?.[0]?.finishReason,
-      text: textResponse.candidates?.[0]?.content?.parts?.[0]?.text?.slice(0, 100),
+      count: names.length,
+      imageModelVisible: names.includes(model),
+      sampleIds: names.slice(0, 8),
     };
   } catch (err) {
-    results.textPing = {
+    results.modelsPing = {
       ok: false,
       error: (err as Error).message,
       status: (err as { status?: number }).status,
     };
   }
 
-  // 3. Image generation test — asks for image output with no input image
+  // Image edit test — sends a dummy PNG and asks for an edited image back
   try {
-    const imgResponse = await ai.models.generateContent({
+    const buffer = Buffer.from(DUMMY_PNG_B64, 'base64');
+    const imageFile = await toFile(buffer, 'dummy.png', { type: 'image/png' });
+    const response = await client.images.edit({
       model,
-      contents: [{ role: 'user', parts: [{ text: 'Generate a small image of a red circle on a white background.' }] }],
-      config: { responseModalities: [Modality.TEXT, Modality.IMAGE] },
+      image: imageFile,
+      prompt: 'Return this image with a red border added around it.',
+      n: 1,
     });
-    const candidate = imgResponse.candidates?.[0];
-    const parts = candidate?.content?.parts ?? [];
-    results.imageGenTest = {
-      ok: true,
-      finishReason: candidate?.finishReason,
-      partCount: parts.length,
-      partTypes: parts.map((p) => (p.inlineData ? `image(${p.inlineData.mimeType})` : 'text')),
-      gotImage: parts.some((p) => !!p.inlineData?.data),
-      textSnippet: parts.find((p) => p.text)?.text?.slice(0, 200),
-      promptFeedback: imgResponse.promptFeedback,
-    };
-  } catch (err) {
-    results.imageGenTest = {
-      ok: false,
-      error: (err as Error).message,
-      status: (err as { status?: number }).status,
-    };
-  }
-
-  // 4. Image-to-image test — sends a dummy image and asks for an edited image back
-  try {
-    const editResponse = await ai.models.generateContent({
-      model,
-      contents: [{
-        role: 'user',
-        parts: [
-          { inlineData: { mimeType: 'image/png', data: DUMMY_PNG_B64 } },
-          { text: 'Return this image with a red border added around it.' },
-        ],
-      }],
-      config: { responseModalities: [Modality.TEXT, Modality.IMAGE] },
-    });
-    const candidate = editResponse.candidates?.[0];
-    const parts = candidate?.content?.parts ?? [];
+    const items = response.data ?? [];
     results.imageEditTest = {
       ok: true,
-      finishReason: candidate?.finishReason,
-      partCount: parts.length,
-      partTypes: parts.map((p) => (p.inlineData ? `image(${p.inlineData.mimeType})` : 'text')),
-      gotImage: parts.some((p) => !!p.inlineData?.data),
-      textSnippet: parts.find((p) => p.text)?.text?.slice(0, 200),
-      promptFeedback: editResponse.promptFeedback,
+      count: items.length,
+      gotImage: items.some((d) => !!d.b64_json),
+      firstDataLength: items[0]?.b64_json?.length ?? 0,
     };
   } catch (err) {
     results.imageEditTest = {
