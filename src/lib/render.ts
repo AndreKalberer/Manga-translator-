@@ -12,7 +12,7 @@ const BASE_PROMPTS: Record<Mode, string> = {
     "Colorize this manga/manhwa/manhua panel with vibrant, natural anime-style colors AND translate every text element into English that reads like an official localized release (Viz Media, Yen Press, Seven Seas). Colorize: add rich, appropriate color to skin tones, hair, clothing, eyes, and backgrounds while preserving all line art, bubble shapes, and panel composition. Translate: write fluent, idiomatic English — not literal — matching each character's voice from their expression and bubble style (arrogant stays haughty, sarcastic stays biting, cold stays clipped, energetic stays loud). Preserve emotional weight (anger, disdain, humor, urgency); use English equivalents for insults, slang, and emphasis at the same intensity. Favor punchy, rhythmically tight lines over long formal sentences. Translate every speech bubble, thought bubble, SFX, and side text — do not skip or soften anything. Lettering consistent with published manga.",
 };
 
-const MODEL = process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-1.5';
+const MODEL = process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2-2026-04-21';
 
 function buildPromptWithAnalysis(mode: Mode, analysis: PanelAnalysis): string {
   const base = BASE_PROMPTS[mode];
