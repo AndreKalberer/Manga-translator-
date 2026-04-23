@@ -42,6 +42,10 @@ Return structured JSON matching the schema. For each text element in the panel (
 
 Do not skip ANY text element. SFX and handwritten side text count. If a background sign has readable text, include it. If a thought bubble is ambiguous, translate it anyway and note the ambiguity in \`voiceNotes\`.
 
+# Screenshots and non-panel UI
+
+The user may upload a screenshot that includes framing around the manga — browser tabs, a phone status bar, scrollbars, a manga-reader app's chrome (page counter, menu icons, timestamps), or desktop background. **Ignore all non-panel content.** Do not translate browser tab titles, URL bars, OS clocks, battery indicators, notification badges, reader-app buttons, page numbers from the reader UI, or anything else that isn't drawn inside the manga panel itself. Only text that is part of the comic art (speech bubbles, thought bubbles, SFX lettering, signs within the scene, narration boxes drawn as part of the page layout) belongs in the output. If the only text you see is UI chrome and there's no actual panel text, return an empty \`bubbles\` array with a \`sceneNotes\` explaining that the image appears to be a screenshot without readable panel dialogue.
+
 # The seven localization criteria
 
 These are non-negotiable. Apply every one to every translated line.
