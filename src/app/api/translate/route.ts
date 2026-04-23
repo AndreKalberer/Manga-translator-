@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import sharp from 'sharp';
 import { renderPanel } from '@/lib/render';
 import { translatePanel } from '@/lib/translator';
-import { checkAndConsume, DAILY_LIMIT } from '@/lib/quota';
+import { checkAndConsume, DAILY_LIMIT, QUOTA_COOKIE_NAME } from '@/lib/quota';
 import type { Mode, PanelAnalysis } from '@/types';
 
 // Requires Vercel Pro plan (Pro caps at 300s; Hobby caps at 60s).
@@ -85,7 +85,8 @@ export async function POST(request: NextRequest) {
   const cost: 1 | 2 = mode === 'both' ? 2 : 1;
 
   // Consume quota
-  const quota = checkAndConsume(ip, cost);
+  const quotaCookie = request.cookies.get(QUOTA_COOKIE_NAME)?.value;
+  const quota = checkAndConsume(ip, quotaCookie, cost);
   if (!quota.allowed) {
     const message =
       quota.reason === 'daily'
@@ -207,11 +208,12 @@ export async function POST(request: NextRequest) {
     }
   })().catch(() => { /* prevent unhandled rejection if the IIFE itself throws */ });
 
-  return new Response(readable, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    },
-  });
+  const headers: Record<string, string> = {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  };
+  if (quota.setCookie) headers['Set-Cookie'] = quota.setCookie;
+
+  return new Response(readable, { headers });
 }
