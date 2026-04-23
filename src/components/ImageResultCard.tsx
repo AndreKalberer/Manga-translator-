@@ -11,7 +11,19 @@ interface ImageResultCardProps {
 export default function ImageResultCard({ result, modeLabel }: ImageResultCardProps) {
   const [selected, setSelected] = useState(0);
 
-  const selectedVariation = result.variations[selected];
+  // Defensive guard — variations should never be empty for a 'done' image
+  // but a malformed SSE frame or out-of-order error event could leave it so.
+  // Without this the JSX below crashes on `selectedVariation.dataUrl`.
+  if (!result.variations || result.variations.length === 0) {
+    return (
+      <div className="bg-white border border-gray-100 rounded-2xl p-6 text-center text-sm text-gray-400">
+        No image available.
+      </div>
+    );
+  }
+
+  const safeIndex = Math.min(selected, result.variations.length - 1);
+  const selectedVariation = result.variations[safeIndex];
 
   const handleDownload = () => {
     const link = document.createElement('a');

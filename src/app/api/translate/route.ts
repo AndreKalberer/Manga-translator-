@@ -3,6 +3,8 @@ import sharp from 'sharp';
 import { renderPanel } from '@/lib/render';
 import { translatePanel } from '@/lib/translator';
 import { checkAndConsume, DAILY_LIMIT, QUOTA_COOKIE_NAME } from '@/lib/quota';
+import { getClientIp } from '@/lib/ip';
+import { logSecurityEvent } from '@/lib/log';
 import type { Mode, PanelAnalysis } from '@/types';
 
 // Requires Vercel Pro plan (Pro caps at 300s; Hobby caps at 60s).
@@ -51,14 +53,6 @@ function safeErrorMessage(err: unknown): string {
   return `Processing failed: ${String(err)}`;
 }
 
-function getClientIp(request: NextRequest): string {
-  return (
-    request.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
-    request.headers.get('x-real-ip') ??
-    'unknown'
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Route handler
 // ---------------------------------------------------------------------------
@@ -80,6 +74,7 @@ export async function POST(request: NextRequest) {
     const allowed = [process.env.NEXT_PUBLIC_SITE_URL, 'http://localhost:3000']
       .filter((v): v is string => typeof v === 'string' && v.length > 0);
     if (!allowed.includes(origin)) {
+      logSecurityEvent(getClientIp(request), { event: 'translate.invalid_origin', origin });
       return new Response(
         JSON.stringify({ error: 'Forbidden origin.' }),
         { status: 403, headers: { 'Content-Type': 'application/json' } }
@@ -87,7 +82,17 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Reject headerless clients rather than lumping them all into a single
+  // 'unknown' bucket where one abuser would share quota with anonymous good
+  // actors. On Vercel, x-vercel-forwarded-for is always present in prod.
   const ip = getClientIp(request);
+  if (!ip) {
+    logSecurityEvent(null, { event: 'translate.missing_ip' });
+    return new Response(
+      JSON.stringify({ error: 'Could not identify client.' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
 
   // Body size guard before reading
   const contentLength = request.headers.get('content-length');
@@ -113,6 +118,7 @@ export async function POST(request: NextRequest) {
   // client can't accidentally bill the wrong cost.
   const rawMode = formData.get('mode');
   if (!VALID_MODES.includes(rawMode as Mode)) {
+    logSecurityEvent(ip, { event: 'translate.invalid_mode', mode: String(rawMode) });
     return new Response(
       JSON.stringify({ error: `Invalid mode. Expected one of: ${VALID_MODES.join(', ')}.` }),
       { status: 400, headers: { 'Content-Type': 'application/json' } }
@@ -120,12 +126,58 @@ export async function POST(request: NextRequest) {
   }
   const mode = rawMode as Mode;
 
+  // Validate file BEFORE consuming quota, so a malformed upload doesn't burn
+  // the user's daily allowance. Order matters: every check that can reject
+  // must run while the quota is still un-touched.
+  const file = formData.get('image');
+  if (!(file instanceof File)) {
+    return new Response(
+      JSON.stringify({ error: 'No image file provided.' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+  if (!file.type.startsWith('image/')) {
+    logSecurityEvent(ip, { event: 'translate.invalid_type', mime: file.type });
+    return new Response(
+      JSON.stringify({ error: 'Uploaded file is not an image.' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    logSecurityEvent(ip, { event: 'translate.size_exceeded', bytes: file.size });
+    return new Response(
+      JSON.stringify({ error: 'Image exceeds the 4 MB size limit.' }),
+      { status: 413, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Read body and magic-byte check while quota is still untouched.
+  const arrayBuffer = await file.arrayBuffer();
+  const inputBuffer = Buffer.from(arrayBuffer);
+  if (!isValidImageMagic(inputBuffer)) {
+    logSecurityEvent(ip, { event: 'translate.invalid_image_magic' });
+    return new Response(
+      JSON.stringify({ error: 'Invalid image file.' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
   const cost: 1 | 2 = mode === 'both' ? 2 : 1;
 
-  // Consume quota
+  // Consume quota — only now, after every cheap validation has passed.
   const quotaCookie = request.cookies.get(QUOTA_COOKIE_NAME)?.value;
   const quota = checkAndConsume(ip, quotaCookie, cost);
   if (!quota.allowed) {
+    if (quota.reason === 'burst') {
+      logSecurityEvent(ip, { event: 'quota.burst_blocked' });
+    } else {
+      logSecurityEvent(ip, {
+        event: 'quota.daily_blocked',
+        used: DAILY_LIMIT - quota.remaining,
+        limit: DAILY_LIMIT,
+        cost,
+      });
+    }
     const message =
       quota.reason === 'daily'
         ? quota.remaining < cost
@@ -146,35 +198,11 @@ export async function POST(request: NextRequest) {
 
   (async () => {
     try {
-      const file = formData.get('image');
-
-      if (!(file instanceof File)) {
-        await writer.write(sseEvent({ step: 'error', message: 'No image file provided.' }));
-        return;
-      }
-
-      if (!file.type.startsWith('image/')) {
-        await writer.write(sseEvent({ step: 'error', message: 'Uploaded file is not an image.' }));
-        return;
-      }
-
-      if (file.size > MAX_FILE_SIZE) {
-        await writer.write(sseEvent({ step: 'error', message: 'Image exceeds the 4 MB size limit.' }));
-        return;
-      }
-
-      console.log(`[translate] start — file=${file.name} size=${file.size} type=${file.type} mode=${mode}`);
-
-      // Read into a Buffer once so we can magic-byte check before sharp.
-      const arrayBuffer = await file.arrayBuffer();
-      const inputBuffer = Buffer.from(arrayBuffer);
-
-      // Validate image signature (defends against polyglots / spoofed
-      // Content-Type before sharp ever touches the bytes).
-      if (!isValidImageMagic(inputBuffer)) {
-        await writer.write(sseEvent({ step: 'error', message: 'Invalid image file.' }));
-        return;
-      }
+      // File body, type, size, magic bytes, and mode were validated above
+      // before quota was consumed. Drop file.name from the log line —
+      // filenames may carry personal info and Vercel log retention can
+      // outlive the request.
+      console.log(`[translate] start — size=${file.size} type=${file.type} mode=${mode}`);
 
       // Convert to PNG. Sharp itself can't be cancelled, but aborting the
       // outer controller on timeout stops the rest of the pipeline (LLM

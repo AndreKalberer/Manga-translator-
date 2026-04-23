@@ -24,6 +24,19 @@ interface BurstEntry {
 }
 const burstMap = new Map<string, BurstEntry>();
 
+// Bound the burst map size — without this, a sustained spray of unique IPs
+// over a long-lived function instance could grow the map without limit.
+// Pruning runs periodically rather than every call to keep the hot path fast.
+const BURST_MAX_ENTRIES = 10_000;
+let lastBurstPrune = 0;
+function maybePruneBurst(now: number): void {
+  if (now - lastBurstPrune < BURST_WINDOW_MS && burstMap.size < BURST_MAX_ENTRIES) return;
+  lastBurstPrune = now;
+  for (const [ip, entry] of burstMap) {
+    if (now - entry.windowStart > BURST_WINDOW_MS) burstMap.delete(ip);
+  }
+}
+
 interface QuotaState {
   dayKey: string; // "YYYY-MM-DD" UTC
   used: number;
@@ -99,6 +112,7 @@ export function checkAndConsume(
   cost: 1 | 2 = 1
 ): ConsumeResult {
   const now = Date.now();
+  maybePruneBurst(now);
 
   // Burst — per-instance, best-effort
   const existing = burstMap.get(ip);

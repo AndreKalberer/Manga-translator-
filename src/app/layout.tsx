@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
+import { headers } from 'next/headers';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -8,9 +9,13 @@ export const metadata: Metadata = {
     'Upload manga, manhwa, or manhua panels and get instant AI-powered English translations. Japanese, Korean, and Chinese supported.',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const rawAdsenseId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID ?? '';
   const adsenseId = /^ca-pub-\d{16}$/.test(rawAdsenseId) ? rawAdsenseId : null;
+
+  // CSP nonce set by middleware.ts. We forward it to every <Script> so they
+  // pass the strict script-src CSP that drops 'unsafe-inline'.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
 
   return (
     <html lang="en">
@@ -22,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseId}`}
             crossOrigin="anonymous"
             strategy="afterInteractive"
+            nonce={nonce}
           />
         )}
         {children}

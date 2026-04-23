@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server';
 import OpenAI, { toFile } from 'openai';
+import { getClientIp } from '@/lib/ip';
+import { logSecurityEvent } from '@/lib/log';
 
 // Tiny 1x1 white PNG — used to test image-in / image-out without a real upload
 const DUMMY_PNG_B64 =
@@ -7,12 +9,15 @@ const DUMMY_PNG_B64 =
   'AABjkB6QAAAABJRU5ErkJggg==';
 
 export async function GET(request: NextRequest) {
-  // Token-gated. Return 404 (not 401) so the endpoint's existence isn't
-  // broadcast to anonymous probers. Set DEBUG_TOKEN in Vercel env vars and
-  // hit the URL with ?token=<value>.
+  // Bearer-token gated. Return 404 (not 401) so the endpoint's existence
+  // isn't broadcast to anonymous probers. Set DEBUG_TOKEN in Vercel env
+  // vars and call with `Authorization: Bearer <DEBUG_TOKEN>`. Bearer
+  // headers are preferred over query strings since they're not logged in
+  // CDN access logs and are not visible in browser history.
   const expected = process.env.DEBUG_TOKEN;
-  const provided = request.nextUrl.searchParams.get('token');
-  if (!expected || provided !== expected) {
+  const authHeader = request.headers.get('authorization') ?? '';
+  if (!expected || authHeader !== `Bearer ${expected}`) {
+    logSecurityEvent(getClientIp(request), { event: 'debug.unauthorized' });
     return new Response('Not found', { status: 404 });
   }
 
@@ -22,8 +27,11 @@ export async function GET(request: NextRequest) {
   const modelEnv = process.env.OPENAI_IMAGE_MODEL;
   const model = modelEnv ?? 'gpt-image-2-2026-04-21';
   const translatorModel = process.env.OPENAI_TRANSLATOR_MODEL ?? 'gpt-5.2';
+  // Don't echo the API key prefix — it's not needed for diagnostics and
+  // 8 chars + service-prefix narrows the brute-force keyspace meaningfully
+  // if logs leak.
   results.env = {
-    OPENAI_API_KEY: apiKey ? `set (${apiKey.slice(0, 8)}...)` : 'MISSING',
+    OPENAI_API_KEY: apiKey ? 'set' : 'MISSING',
     OPENAI_IMAGE_MODEL: modelEnv ?? '(not set — using fallback)',
     OPENAI_TRANSLATOR_MODEL: process.env.OPENAI_TRANSLATOR_MODEL ?? '(not set — using fallback)',
     effectiveImageModel: model,
