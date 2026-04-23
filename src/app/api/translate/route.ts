@@ -35,7 +35,9 @@ function safeErrorMessage(err: unknown): string {
 }
 
 function getClientIp(request: NextRequest): string {
+  // x-vercel-forwarded-for is set by Vercel's edge and cannot be forged by clients
   return (
+    request.headers.get('x-vercel-forwarded-for') ??
     request.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
     request.headers.get('x-real-ip') ??
     'unknown'
@@ -123,7 +125,7 @@ export async function POST(request: NextRequest) {
         return;
       }
 
-      console.log(`[translate] start — file=${file.name} size=${file.size} type=${file.type} mode=${mode}`);
+      console.log(`[translate] start — size=${file.size} type=${file.type} mode=${mode}`);
       await writer.write(sseEvent({ step: 'rendering', mode }));
 
       // Convert to PNG (sharp also validates the image — rejects non-images)

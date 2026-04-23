@@ -7,13 +7,23 @@ const DUMMY_PNG_B64 =
   'AABjkB6QAAAABJRU5ErkJggg==';
 
 export async function GET(request: NextRequest) {
+  // Require a secret token — if DEBUG_TOKEN is not set the endpoint is disabled
+  const debugToken = process.env.DEBUG_TOKEN;
+  if (!debugToken) {
+    return Response.json({ error: 'Debug endpoint is disabled.' }, { status: 403 });
+  }
+  const authHeader = request.headers.get('authorization') ?? '';
+  if (authHeader !== `Bearer ${debugToken}`) {
+    return Response.json({ error: 'Forbidden.' }, { status: 403 });
+  }
+
   const results: Record<string, unknown> = {};
 
   // 1. Check env vars
   const apiKey = process.env.GEMINI_API_KEY;
   const modelEnv = process.env.GEMINI_IMAGE_MODEL;
   results.env = {
-    GEMINI_API_KEY: apiKey ? `set (${apiKey.slice(0, 8)}...)` : 'MISSING',
+    GEMINI_API_KEY: apiKey ? 'set' : 'MISSING',
     GEMINI_IMAGE_MODEL: modelEnv ?? '(not set — using fallback)',
     effectiveModel: modelEnv ?? 'gemini-3.1-flash-image-preview',
   };

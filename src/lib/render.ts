@@ -67,9 +67,15 @@ async function generateVariation(
     throw new Error('Image was blocked by Gemini safety filters.');
   }
 
+  const MAX_RESPONSE_B64_BYTES = 20 * 1024 * 1024; // ~15 MB decoded
   const parts = candidate.content?.parts ?? [];
   for (const part of parts) {
-    if (part.inlineData?.data) return part.inlineData.data;
+    if (part.inlineData?.data) {
+      if (part.inlineData.data.length > MAX_RESPONSE_B64_BYTES) {
+        throw new Error('Gemini response image exceeds maximum allowed size.');
+      }
+      return part.inlineData.data;
+    }
   }
   throw new Error(
     `Gemini returned no image. finishReason=${candidate.finishReason ?? 'none'} parts=${parts.length} ` +

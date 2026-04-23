@@ -17,6 +17,19 @@ interface QuotaEntry {
 
 const quotaMap = new Map<string, QuotaEntry>();
 
+// Prune entries from previous days to prevent unbounded memory growth
+const CLEANUP_INTERVAL = 100;
+let requestsSinceCleanup = 0;
+
+function maybePruneStaleEntries(): void {
+  if (++requestsSinceCleanup < CLEANUP_INTERVAL) return;
+  requestsSinceCleanup = 0;
+  const today = getDayKey();
+  for (const [ip, entry] of quotaMap) {
+    if (entry.dayKey !== today) quotaMap.delete(ip);
+  }
+}
+
 function getDayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -67,6 +80,7 @@ export function checkAndConsume(
 
   entry.used += cost;
   entry.burstCount += 1;
+  maybePruneStaleEntries();
   return { allowed: true, remaining: DAILY_LIMIT - entry.used, resetAt: getResetAt() };
 }
 

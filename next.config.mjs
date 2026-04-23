@@ -26,7 +26,7 @@ const nextConfig = {
             "default-src 'self'",
             "script-src 'self' 'unsafe-inline' https://pagead2.googlesyndication.com https://www.googletagservices.com",
             "style-src 'self' 'unsafe-inline'",
-            "img-src 'self' data: blob: https:",
+            "img-src 'self' data: blob: https://pagead2.googlesyndication.com",
             "connect-src 'self'",
             "font-src 'self'",
             "frame-src https://googleads.g.doubleclick.net https://tpc.googlesyndication.com",
