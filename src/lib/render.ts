@@ -50,7 +50,8 @@ export async function renderPanel(
         model: MODEL,
         image: imageFile,
         prompt,
-        n: 3,
+        n: 1,
+        quality: 'medium',
       },
       { signal }
     )

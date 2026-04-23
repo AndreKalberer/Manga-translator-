@@ -201,8 +201,8 @@ export default function HomePage() {
                     <span className="text-accent-500">in Your Language</span>
                   </h1>
                   <p className="text-gray-500 text-base sm:text-lg leading-relaxed max-w-md mx-auto md:mx-0">
-                    Drop a panel in, let the model handle the rest. Get three
-                    lettered variations to pick from — no language barrier.
+                    Drop a panel in, let the model handle the rest.
+                    Publication-quality lettering in your language.
                   </p>
 
                   <div className="flex flex-col items-center md:items-start gap-3 pt-1">
@@ -301,7 +301,7 @@ export default function HomePage() {
                   Drop your panels in
                 </h2>
                 <p className="text-gray-500 text-sm">
-                  Choose a mode, drop in your panels, and get 3 options to pick from.
+                  Choose a mode, drop in your panels, and get clean English lettering.
                 </p>
               </div>
 
