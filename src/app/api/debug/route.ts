@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { GoogleGenAI, Modality } from '@google/genai';
+import { logSecurityEvent } from '@/lib/log';
 
 // Tiny 1x1 white PNG — used to test image-in / image-out without a real upload
 const DUMMY_PNG_B64 =
@@ -14,6 +15,11 @@ export async function GET(request: NextRequest) {
   }
   const authHeader = request.headers.get('authorization') ?? '';
   if (authHeader !== `Bearer ${debugToken}`) {
+    const ip =
+      request.headers.get('x-vercel-forwarded-for') ??
+      request.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
+      'unknown';
+    logSecurityEvent(ip, { event: 'debug.unauthorized' });
     return Response.json({ error: 'Forbidden.' }, { status: 403 });
   }
 

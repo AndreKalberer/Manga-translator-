@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import sharp from 'sharp';
 import { renderPanel } from '@/lib/render';
 import { checkAndConsume, DAILY_LIMIT } from '@/lib/quota';
+import { logSecurityEvent } from '@/lib/log';
 import type { Mode } from '@/types';
 
 // Requires Vercel Pro plan; on Hobby the function is capped at 10s regardless.
@@ -57,7 +58,10 @@ export async function POST(request: NextRequest) {
 
   const ip = getClientIp(request);
 
-  // Body size guard before reading
+  // Body size guard before reading. If the client omits Content-Length this check is
+  // skipped and the full body is buffered by formData(); the definitive size check on
+  // file.size below still rejects oversized payloads — Vercel also enforces a 4.5 MB
+  // platform cap on all serverless function request bodies.
   const contentLength = request.headers.get('content-length');
   if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE + 8192) {
     return new Response(
@@ -88,6 +92,11 @@ export async function POST(request: NextRequest) {
   // Consume quota
   const quota = checkAndConsume(ip, cost);
   if (!quota.allowed) {
+    if (quota.reason === 'burst') {
+      logSecurityEvent(ip, { event: 'quota.burst_blocked' });
+    } else {
+      logSecurityEvent(ip, { event: 'quota.daily_blocked', used: DAILY_LIMIT - quota.remaining, limit: DAILY_LIMIT });
+    }
     const message =
       quota.reason === 'daily'
         ? quota.remaining < cost
@@ -116,11 +125,13 @@ export async function POST(request: NextRequest) {
       }
 
       if (!file.type.startsWith('image/')) {
+        logSecurityEvent(ip, { event: 'translate.invalid_type', mime: file.type });
         await writer.write(sseEvent({ step: 'error', message: 'Uploaded file is not an image.' }));
         return;
       }
 
       if (file.size > MAX_FILE_SIZE) {
+        logSecurityEvent(ip, { event: 'translate.size_exceeded', bytes: file.size });
         await writer.write(sseEvent({ step: 'error', message: 'Image exceeds the 4 MB size limit.' }));
         return;
       }

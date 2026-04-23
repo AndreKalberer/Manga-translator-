@@ -84,6 +84,27 @@ export function checkAndConsume(
   return { allowed: true, remaining: DAILY_LIMIT - entry.used, resetAt: getResetAt() };
 }
 
+/** Enforce burst limit only — no daily quota consumed. Used for cheap read-only endpoints. */
+export function checkBurstOnly(ip: string): boolean {
+  const today = getDayKey();
+  const now = Date.now();
+  const entry = quotaMap.get(ip);
+
+  if (!entry || entry.dayKey !== today) {
+    quotaMap.set(ip, { dayKey: today, used: 0, burstCount: 1, burstWindowStart: now });
+    return true;
+  }
+
+  if (now - entry.burstWindowStart > BURST_WINDOW_MS) {
+    entry.burstCount = 0;
+    entry.burstWindowStart = now;
+  }
+
+  if (entry.burstCount >= BURST_MAX) return false;
+  entry.burstCount += 1;
+  return true;
+}
+
 /** Read quota without consuming it (for GET /api/quota). */
 export function peekQuota(ip: string): { remaining: number; limit: number; resetAt: string } {
   const today = getDayKey();
