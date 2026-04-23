@@ -45,10 +45,13 @@ export default function Navbar({ quota }: NavbarProps) {
           <span className="text-gray-900">MangaTL</span>
         </Link>
 
-        {/* Desktop nav */}
+        {/* Desktop nav. We only highlight pathname-based links (Home, About);
+            the hash links don't reliably reflect scroll position without a
+            scroll-spy and would be misleading if highlighted statically. */}
         <div className="hidden md:flex items-center gap-8 text-sm">
           {NAV_LINKS.map((link) => {
-            const active = link.href === '/' ? pathname === '/' : pathname?.startsWith(link.href.split('#')[0]) && link.href.includes('#') === false && pathname === link.href;
+            const isPathLink = !link.href.includes('#');
+            const active = isPathLink && pathname === link.href;
             return (
               <Link
                 key={link.href}

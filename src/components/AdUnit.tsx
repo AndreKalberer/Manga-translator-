@@ -27,6 +27,10 @@ export default function AdUnit({ slot, format = 'auto', className = '' }: AdUnit
   }, [clientId]);
 
   if (!clientId) {
+    // In production, render nothing rather than a "Ad · slot" placeholder
+    // — placeholders ship to real users when the env var is forgotten.
+    // In dev, the placeholder is useful for layout debugging.
+    if (process.env.NODE_ENV === 'production') return null;
     return (
       <div
         className={`flex items-center justify-center bg-gray-50 border border-dashed border-gray-200 rounded-xl text-gray-400 text-xs ${className}`}

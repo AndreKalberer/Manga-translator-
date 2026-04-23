@@ -43,7 +43,9 @@ export default function UploadZone({
     };
   }, []);
 
-  const isBlocked = disabled || quotaExhausted;
+  const costForMode: 1 | 2 = mode === 'both' ? 2 : 1;
+  const insufficientForMode = remaining !== undefined && remaining < costForMode;
+  const isBlocked = disabled || quotaExhausted || insufficientForMode;
 
   const addFiles = useCallback((incoming: FileList | File[]) => {
     const valid = Array.from(incoming).filter(
@@ -175,13 +177,20 @@ export default function UploadZone({
 
       {/* Submit */}
       {selectedFiles.length > 0 && (
-        <button
-          onClick={handleSubmit}
-          disabled={isBlocked}
-          className="w-full py-3 px-6 rounded-xl font-semibold bg-gray-900 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-white text-sm"
-        >
-          {MODE_LABELS[mode]} {selectedFiles.length} {selectedFiles.length === 1 ? 'panel' : 'panels'}
-        </button>
+        <>
+          <button
+            onClick={handleSubmit}
+            disabled={isBlocked}
+            className="w-full py-3 px-6 rounded-xl font-semibold bg-gray-900 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-white text-sm"
+          >
+            {MODE_LABELS[mode]} {selectedFiles.length} {selectedFiles.length === 1 ? 'panel' : 'panels'}
+          </button>
+          {insufficientForMode && !quotaExhausted && (
+            <p className="text-xs text-accent-500 text-center -mt-1">
+              &ldquo;{MODE_LABELS[mode]}&rdquo; costs {costForMode} uses, but you only have {remaining} left today. Switch to a 1-use mode or wait until tomorrow.
+            </p>
+          )}
+        </>
       )}
     </div>
   );

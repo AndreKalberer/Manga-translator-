@@ -3,7 +3,7 @@ import Script from 'next/script';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'MangaTranslate — Translate Manga Panels to English',
+  title: 'MangaTL — Translate Manga Panels to English',
   description:
     'Upload manga, manhwa, or manhua panels and get instant AI-powered English translations. Japanese, Korean, and Chinese supported.',
 };
@@ -28,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <footer className="mt-auto border-t border-gray-100 bg-white">
           <div className="max-w-5xl mx-auto px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-400">
             <p>
-              &copy; {new Date().getFullYear()} MangaTranslate &mdash; images are never stored
+              &copy; {new Date().getFullYear()} MangaTL &mdash; images are never stored
             </p>
             <div className="flex items-center gap-4">
               <span className="text-gray-300">Powered by OpenAI</span>

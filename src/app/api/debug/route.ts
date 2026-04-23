@@ -6,7 +6,16 @@ const DUMMY_PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQ' +
   'AABjkB6QAAAABJRU5ErkJggg==';
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
+  // Token-gated. Return 404 (not 401) so the endpoint's existence isn't
+  // broadcast to anonymous probers. Set DEBUG_TOKEN in Vercel env vars and
+  // hit the URL with ?token=<value>.
+  const expected = process.env.DEBUG_TOKEN;
+  const provided = request.nextUrl.searchParams.get('token');
+  if (!expected || provided !== expected) {
+    return new Response('Not found', { status: 404 });
+  }
+
   const results: Record<string, unknown> = {};
 
   const apiKey = process.env.OPENAI_API_KEY;

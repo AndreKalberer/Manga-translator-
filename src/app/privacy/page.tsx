@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Navbar from '@/components/Navbar';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy — MangaTranslate',
+  title: 'Privacy Policy — MangaTL',
 };
 
 export default function PrivacyPage() {
@@ -18,7 +18,7 @@ export default function PrivacyPage() {
         <section className="space-y-3 text-gray-600 leading-relaxed">
           <h2 className="text-lg font-bold text-gray-900">Data we collect</h2>
           <p>
-            MangaTranslate does not require registration and does not collect personal information.
+            MangaTL does not require registration and does not collect personal information.
           </p>
           <p>
             When you upload an image, it is sent securely to the OpenAI API for processing
@@ -61,8 +61,18 @@ export default function PrivacyPage() {
         <section className="space-y-3 text-gray-600 leading-relaxed">
           <h2 className="text-lg font-bold text-gray-900">Cookies</h2>
           <p>
-            We do not set our own cookies. Google AdSense may set cookies to serve relevant
-            advertisements. You can control cookie preferences through your browser settings.
+            We set one functional cookie called <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">mtq</code> to
+            track your daily free-use count so the limit persists across page reloads. The cookie
+            contains an HMAC-signed counter (no personal information, no IP address, no fingerprint)
+            and expires at the next UTC midnight when the daily quota resets. It is{' '}
+            <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">HttpOnly</code> and{' '}
+            <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">Secure</code>, so it can&apos;t be read by
+            JavaScript and is only transmitted over HTTPS. Clearing it (e.g. via incognito mode or
+            browser settings) resets your daily count.
+          </p>
+          <p>
+            Google AdSense may also set its own cookies to serve relevant advertisements. You can
+            control cookie preferences through your browser settings.
           </p>
         </section>
 

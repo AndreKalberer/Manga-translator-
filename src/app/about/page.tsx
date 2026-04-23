@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Navbar from '@/components/Navbar';
 
 export const metadata: Metadata = {
-  title: 'About — MangaTranslate',
+  title: 'About — MangaTL',
 };
 
 export default function AboutPage() {
@@ -10,30 +10,33 @@ export default function AboutPage() {
     <div className="flex flex-col min-h-screen">
       <Navbar />
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-12 space-y-8">
-        <h1 className="text-3xl font-black text-gray-900">About MangaTranslate</h1>
+        <h1 className="text-3xl font-black text-gray-900">About MangaTL</h1>
 
         <section className="space-y-3 text-gray-600 leading-relaxed">
           <h2 className="text-lg font-bold text-gray-900">What is this?</h2>
           <p>
-            MangaTranslate uses AI image models to translate speech bubbles and text found in
+            MangaTL uses AI image models to translate speech bubbles and text found in
             manga (Japanese), manhwa (Korean), and manhua (Chinese) panels directly into English.
           </p>
           <p>
-            Upload your panels, and the AI detects the source language, translates the dialogue
-            naturally, and returns three variations for you to pick the best result.
+            Upload your panels, and the AI detects the source language, reads each bubble, and
+            renders a publication-quality English translation of the panel.
           </p>
         </section>
 
         <section className="space-y-3 text-gray-600 leading-relaxed">
           <h2 className="text-lg font-bold text-gray-900">How does it work?</h2>
           <ol className="list-decimal list-inside space-y-2">
-            <li>Upload one or more panel images (JPEG, PNG, or WebP — up to 20 MB each).</li>
+            <li>Upload one or more panel images (JPEG, PNG, or WebP — up to 4 MB each).</li>
             <li>
-              Each image is sent to an AI model that reads the text, translates it, and redraws
-              the panel with English text inside the speech bubbles.
+              A vision model first reads every speech bubble, thought bubble, and sound effect,
+              and produces a localized English transcript with character voice notes.
             </li>
-            <li>Three translation variations are generated so you can choose the best one.</li>
-            <li>Download your favourite — no account or signup required.</li>
+            <li>
+              An image model then renders the panel with the translated English text lettered
+              into the original bubble positions.
+            </li>
+            <li>Download the result — no account or signup required.</li>
           </ol>
         </section>
 

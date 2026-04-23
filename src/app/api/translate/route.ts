@@ -12,6 +12,22 @@ const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const MAX_WIDTH = 1500;
 const VALID_MODES: Mode[] = ['translate', 'color', 'both'];
 
+// First few bytes of valid image formats. Belt-and-suspenders check before
+// sharp — rejects polyglots and files with spoofed Content-Type headers.
+function isValidImageMagic(buf: Buffer): boolean {
+  if (buf.length < 12) return false;
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return true;
+  // JPEG: FF D8 FF
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return true;
+  // WebP: "RIFF" .... "WEBP"
+  if (
+    buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+    buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50
+  ) return true;
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -54,6 +70,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Origin allowlist — block cross-origin abuse that would otherwise spend
+  // OpenAI credits anonymously. Browsers always send Origin on cross-site
+  // requests; same-origin browser requests may omit it (and curl doesn't
+  // send it by default), so only reject when Origin IS set and doesn't
+  // match. NEXT_PUBLIC_SITE_URL is the production URL; localhost is for dev.
+  const origin = request.headers.get('origin');
+  if (origin) {
+    const allowed = [process.env.NEXT_PUBLIC_SITE_URL, 'http://localhost:3000']
+      .filter((v): v is string => typeof v === 'string' && v.length > 0);
+    if (!allowed.includes(origin)) {
+      return new Response(
+        JSON.stringify({ error: 'Forbidden origin.' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+  }
+
   const ip = getClientIp(request);
 
   // Body size guard before reading
@@ -76,11 +109,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Validate mode
+  // Validate mode — fail loud rather than silently defaulting, so a buggy
+  // client can't accidentally bill the wrong cost.
   const rawMode = formData.get('mode');
-  const mode: Mode = VALID_MODES.includes(rawMode as Mode)
-    ? (rawMode as Mode)
-    : 'translate';
+  if (!VALID_MODES.includes(rawMode as Mode)) {
+    return new Response(
+      JSON.stringify({ error: `Invalid mode. Expected one of: ${VALID_MODES.join(', ')}.` }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+  const mode = rawMode as Mode;
 
   const cost: 1 | 2 = mode === 'both' ? 2 : 1;
 
@@ -127,17 +165,33 @@ export async function POST(request: NextRequest) {
 
       console.log(`[translate] start — file=${file.name} size=${file.size} type=${file.type} mode=${mode}`);
 
-      // Convert to PNG (sharp also validates the image — rejects non-images)
-      const SHARP_TIMEOUT_MS = 15_000;
+      // Read into a Buffer once so we can magic-byte check before sharp.
       const arrayBuffer = await file.arrayBuffer();
+      const inputBuffer = Buffer.from(arrayBuffer);
+
+      // Validate image signature (defends against polyglots / spoofed
+      // Content-Type before sharp ever touches the bytes).
+      if (!isValidImageMagic(inputBuffer)) {
+        await writer.write(sseEvent({ step: 'error', message: 'Invalid image file.' }));
+        return;
+      }
+
+      // Convert to PNG. Sharp itself can't be cancelled, but aborting the
+      // outer controller on timeout stops the rest of the pipeline (LLM
+      // call, image gen) from being kicked off if sharp eventually
+      // resolves after we've already given up.
+      const SHARP_TIMEOUT_MS = 15_000;
       console.log('[translate] running sharp...');
       const pngBuffer = await Promise.race([
-        sharp(Buffer.from(arrayBuffer))
+        sharp(inputBuffer)
           .resize({ width: MAX_WIDTH, withoutEnlargement: true })
           .png()
           .toBuffer(),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Image processing timed out.')), SHARP_TIMEOUT_MS)
+          setTimeout(() => {
+            abortController.abort();
+            reject(new Error('Image processing timed out.'));
+          }, SHARP_TIMEOUT_MS)
         ),
       ]);
       console.log(`[translate] sharp done — output ${pngBuffer.length} bytes`);
