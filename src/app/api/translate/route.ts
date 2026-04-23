@@ -47,7 +47,7 @@ function getClientIp(request: NextRequest): string {
 // Route handler
 // ---------------------------------------------------------------------------
 export async function POST(request: NextRequest) {
-  if (!process.env.OPENAI_API_KEY || !process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.OPENAI_API_KEY) {
     return new Response(
       JSON.stringify({ error: 'Service is not configured.' }),
       { status: 503, headers: { 'Content-Type': 'application/json' } }

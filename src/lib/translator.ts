@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
-import { getAnthropicClient } from './anthropic';
+import { zodResponseFormat } from 'openai/helpers/zod';
+import { getOpenAIClient } from './openai';
 import type { PanelAnalysis } from '@/types';
 
 const BubbleSchema = z.object({
@@ -31,6 +31,8 @@ const PanelAnalysisSchema = z.object({
     .string()
     .describe('One sentence describing what is happening in the panel (speaker positions, emotions, action).'),
 });
+
+const TRANSLATOR_MODEL = process.env.OPENAI_TRANSLATOR_MODEL ?? 'gpt-5.2';
 
 const STYLE_GUIDE = `You are a senior English-language manga localizer working at the quality bar of Viz Media, Yen Press, and Seven Seas. Your job is to analyze a single manga/manhwa/manhua panel and produce publication-quality English translations for every text element in it.
 
@@ -126,47 +128,37 @@ export async function translatePanel(
   pngBuffer: Buffer,
   signal?: AbortSignal
 ): Promise<PanelAnalysis> {
-  const client = getAnthropicClient();
+  const client = getOpenAIClient();
   const imageBase64 = pngBuffer.toString('base64');
 
-  const response = await client.messages.parse(
+  const completion = await client.chat.completions.parse(
     {
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      thinking: { type: 'disabled' },
-      output_config: {
-        effort: 'medium',
-        format: zodOutputFormat(PanelAnalysisSchema),
-      },
-      system: [
-        {
-          type: 'text',
-          text: STYLE_GUIDE,
-          cache_control: { type: 'ephemeral' },
-        },
-      ],
+      model: TRANSLATOR_MODEL,
       messages: [
+        { role: 'system', content: STYLE_GUIDE },
         {
           role: 'user',
           content: [
             {
-              type: 'image',
-              source: { type: 'base64', media_type: 'image/png', data: imageBase64 },
-            },
-            {
               type: 'text',
               text: 'Analyze this manga/manhwa/manhua panel. Produce publication-quality English translations for every text element following the style guide. Return the structured JSON.',
+            },
+            {
+              type: 'image_url',
+              image_url: { url: `data:image/png;base64,${imageBase64}` },
             },
           ],
         },
       ],
+      response_format: zodResponseFormat(PanelAnalysisSchema, 'panel_analysis'),
     },
     { signal }
   );
 
-  const parsed = response.parsed_output;
+  const parsed = completion.choices[0]?.message?.parsed;
   if (!parsed) {
-    throw new Error('Translation model returned no parseable output.');
+    const refusal = completion.choices[0]?.message?.refusal;
+    throw new Error(refusal ?? 'Translation model returned no parseable output.');
   }
   return parsed;
 }
