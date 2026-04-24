@@ -14,6 +14,29 @@ export const metadata: Metadata = {
   description:
     'Upload manga, manhwa, or manhua panels and get instant AI-powered English translations. Japanese, Korean, and Chinese supported.',
   metadataBase: new URL(SITE_URL),
+  openGraph: {
+    type: 'website',
+    siteName: 'MangaTL',
+    title: 'MangaTL — Translate Manga Panels to English',
+    description:
+      'AI-powered translator for manga, manhwa, and manhua panels. Upload, translate, and re-letter bubbles in seconds.',
+    url: SITE_URL,
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'MangaTL — AI manga panel translator',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'MangaTL — Translate Manga Panels to English',
+    description:
+      'AI-powered translator for manga, manhwa, and manhua panels. Upload, translate, and re-letter bubbles in seconds.',
+    images: ['/og-image.png'],
+  },
 };
 
 // Schema.org SoftwareApplication entry — helps Google understand the site
