@@ -1,12 +1,34 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
 import { headers } from 'next/headers';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import './globals.css';
+
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
 export const metadata: Metadata = {
   title: 'MangaTL — Translate Manga Panels to English',
   description:
     'Upload manga, manhwa, or manhua panels and get instant AI-powered English translations. Japanese, Korean, and Chinese supported.',
+  metadataBase: new URL(SITE_URL),
+};
+
+// Schema.org SoftwareApplication entry — helps Google understand the site
+// as a web app rather than a generic page, improves rich-result eligibility.
+const JSON_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'MangaTL',
+  description:
+    'AI-powered translator for manga, manhwa, and manhua panels. Upload a panel, get a publication-quality English translation rendered into the original bubbles.',
+  url: SITE_URL,
+  applicationCategory: 'UtilityApplication',
+  operatingSystem: 'Any (web)',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  inLanguage: 'en',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -19,7 +41,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en">
-      <head />
+      <head>
+        <script
+          type="application/ld+json"
+          nonce={nonce}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+        />
+      </head>
       <body className="min-h-screen flex flex-col">
         {adsenseId && (
           <Script
@@ -31,6 +59,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           />
         )}
         {children}
+        <Analytics />
+        <SpeedInsights />
         <footer className="mt-auto border-t border-gray-100 bg-white">
           <div className="max-w-5xl mx-auto px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-400">
             <p>
@@ -40,6 +70,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <span className="text-gray-300">Powered by OpenAI</span>
               <a href="/about" className="hover:text-gray-600 transition-colors">About</a>
               <a href="/privacy" className="hover:text-gray-600 transition-colors">Privacy</a>
+              <a href="/terms" className="hover:text-gray-600 transition-colors">Terms</a>
               <a href="mailto:hello@mangatl.com" className="hover:text-gray-600 transition-colors">Contact</a>
             </div>
           </div>
