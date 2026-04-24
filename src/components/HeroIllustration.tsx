@@ -15,10 +15,13 @@ export default function HeroIllustration() {
         className="absolute inset-0 rounded-[2.5rem] bg-gradient-to-br from-accent-50 via-accent-100/70 to-accent-200/40"
       />
 
-      {/* User-provided illustration at public/hero-illustration.png */}
+      {/* User-provided illustration. WebP (~130 KB); ~8x smaller than the
+          original PNG. Preloaded with fetchPriority=high to improve LCP. */}
       <img
-        src="/hero-illustration.png"
+        src="/hero-illustration.webp"
         alt=""
+        fetchPriority="high"
+        decoding="async"
         onLoad={() => setLoaded(true)}
         onError={() => setFailed(true)}
         className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-500 ${

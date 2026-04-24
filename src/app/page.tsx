@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { track } from '@vercel/analytics';
 import Navbar from '@/components/Navbar';
 import UploadZone from '@/components/UploadZone';
 import ImageResultCard from '@/components/ImageResultCard';
@@ -8,6 +9,38 @@ import ProgressBar from '@/components/ProgressBar';
 import AdUnit from '@/components/AdUnit';
 import HeroIllustration from '@/components/HeroIllustration';
 import { ProcessedImage, QuotaInfo, Mode } from '@/types';
+
+const MODE_STORAGE_KEY = 'mtl.mode';
+const VALID_MODES = new Set<Mode>(['translate', 'color', 'both']);
+
+// FAQ entries are duplicated into layout.tsx's FAQPage JSON-LD so Google
+// can render rich-result FAQ cards. Keep this list and that one in sync.
+const FAQ = [
+  {
+    q: 'What counts as one "use"?',
+    a: 'Each panel you upload counts as one use. "Translate + Colorize" mode costs two uses because it runs both a translation pass and a colorization pass.',
+  },
+  {
+    q: 'Does it work on webtoons and manhwa?',
+    a: 'Yes. The model handles Japanese manga, Korean manhwa, and Chinese manhua automatically — no language setting needed.',
+  },
+  {
+    q: 'Why do I only get 10 free uses per day?',
+    a: 'Each panel costs real money to process via the AI models. A daily limit keeps the service free for everyone. The count resets at UTC midnight.',
+  },
+  {
+    q: 'Are my images stored anywhere?',
+    a: 'No. Panels are processed in memory and sent to OpenAI for translation and rendering. We do not save, log, or share your images.',
+  },
+  {
+    q: 'Can I upload a screenshot with browser or reader UI around the panel?',
+    a: 'Yes. The model crops to the panel and ignores browser chrome, status bars, and reader-app UI automatically.',
+  },
+  {
+    q: 'Can I translate multiple panels at once?',
+    a: 'Yes — drop up to 10 panels in at a time. They process one after another with a progress bar for each.',
+  },
+];
 
 type AppStatus = 'idle' | 'processing' | 'done';
 
@@ -60,7 +93,23 @@ export default function HomePage() {
   const [status, setStatus] = useState<AppStatus>('idle');
   const [queue, setQueue] = useState<ProcessedImage[]>([]);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
-  const [mode, setMode] = useState<Mode>('translate');
+  const [mode, setModeState] = useState<Mode>('translate');
+
+  // Remember the last selected mode across sessions so returning users
+  // don't re-pick every visit. Guarded against unknown values in case the
+  // Mode union changes in a future version.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(MODE_STORAGE_KEY);
+      if (saved && VALID_MODES.has(saved as Mode)) setModeState(saved as Mode);
+    } catch { /* storage blocked (incognito / private mode) */ }
+  }, []);
+
+  const setMode = useCallback((next: Mode) => {
+    setModeState(next);
+    try { localStorage.setItem(MODE_STORAGE_KEY, next); } catch { /* ignore */ }
+    track('mode_selected', { mode: next });
+  }, []);
 
   useEffect(() => {
     fetch('/api/quota')
@@ -95,6 +144,7 @@ export default function HomePage() {
         }
       } catch { /* plain text */ }
       updateImage(imageId, { status: 'error', errorMessage: message });
+      track('translate_error', { status: response.status, reason: message.slice(0, 80) });
       return;
     }
 
@@ -125,12 +175,13 @@ export default function HomePage() {
         } else if (step === 'rendering') {
           updateImage(imageId, { status: 'rendering' });
         } else if (step === 'done') {
+          const analysis = event.analysis as ProcessedImage['analysis'] | undefined;
           updateImage(imageId, {
             status: 'done',
             originalDataUrl: event.originalDataUrl as string,
             variations: event.variations as ProcessedImage['variations'],
             selectedIndex: 0,
-            analysis: event.analysis as ProcessedImage['analysis'],
+            analysis,
           });
           if (event.remaining !== undefined) {
             setQuota((prev) =>
@@ -139,11 +190,14 @@ export default function HomePage() {
                 : null
             );
           }
-        } else if (step === 'error') {
-          updateImage(imageId, {
-            status: 'error',
-            errorMessage: (event.message as string) ?? 'Unknown error',
+          track('translate_done', {
+            mode: fileMode,
+            bubbles: analysis?.bubbles?.length ?? 0,
           });
+        } else if (step === 'error') {
+          const message = (event.message as string) ?? 'Unknown error';
+          updateImage(imageId, { status: 'error', errorMessage: message });
+          track('translate_error', { status: 500, reason: message.slice(0, 80) });
         }
       }
     }
@@ -151,6 +205,7 @@ export default function HomePage() {
 
   const handleSubmit = async (files: File[]) => {
     const currentMode = mode;
+    track('translate_submit', { mode: currentMode, count: files.length });
     const entries: ProcessedImage[] = files.map((file) => ({
       imageId: crypto.randomUUID(),
       originalFileName: file.name,
@@ -357,6 +412,47 @@ export default function HomePage() {
             />
           </section>
         )}
+
+        {/* ---------- FAQ ---------- */}
+        <section id="faq" className="scroll-mt-20">
+          <div className="max-w-3xl mx-auto px-5 sm:px-8 pb-20">
+            <div className="text-center space-y-2 mb-8">
+              <p className="text-[11px] sm:text-xs font-bold tracking-[0.18em] uppercase text-accent-500">
+                FAQ
+              </p>
+              <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
+                Questions, answered
+              </h2>
+            </div>
+            <div className="space-y-3">
+              {FAQ.map((item) => (
+                <details
+                  key={item.q}
+                  className="group bg-white rounded-2xl border border-gray-100 px-5 py-4 open:shadow-sm transition-shadow"
+                >
+                  <summary className="cursor-pointer list-none flex items-center justify-between gap-4">
+                    <span className="font-semibold text-gray-900 text-sm sm:text-base">
+                      {item.q}
+                    </span>
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="flex-shrink-0 w-4 h-4 text-gray-400 transition-transform group-open:rotate-180"
+                      aria-hidden
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </summary>
+                  <p className="text-sm text-gray-600 leading-relaxed mt-3">{item.a}</p>
+                </details>
+              ))}
+            </div>
+          </div>
+        </section>
       </main>
     </div>
   );

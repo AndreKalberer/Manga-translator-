@@ -10,6 +10,7 @@ interface ImageResultCardProps {
 
 export default function ImageResultCard({ result, modeLabel }: ImageResultCardProps) {
   const [selected, setSelected] = useState(0);
+  const [copied, setCopied] = useState(false);
 
   // Defensive guard — variations should never be empty for a 'done' image
   // but a malformed SSE frame or out-of-order error event could leave it so.
@@ -34,6 +35,22 @@ export default function ImageResultCard({ result, modeLabel }: ImageResultCardPr
       .slice(0, 100);
     link.download = `${base}_translated_v${selected + 1}.png`;
     link.click();
+  };
+
+  const handleCopyTranscript = async () => {
+    const bubbles = result.analysis?.bubbles ?? [];
+    if (bubbles.length === 0) return;
+    const scene = result.analysis?.sceneNotes?.trim();
+    const lines = bubbles.map((b, i) => {
+      const speaker = b.speakerDescription ? ` (${b.speakerDescription})` : '';
+      return `${i + 1}. [${b.kind}]${speaker} ${b.translatedText}`;
+    });
+    const text = [scene ? `Scene: ${scene}` : null, ...lines].filter(Boolean).join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch { /* clipboard denied */ }
   };
 
   return (
@@ -134,9 +151,17 @@ export default function ImageResultCard({ result, modeLabel }: ImageResultCardPr
         {/* Transcript */}
         {result.analysis && result.analysis.bubbles.length > 0 && (
           <div>
-            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-widest mb-2">
-              Transcript
-            </p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-widest">
+                Transcript
+              </p>
+              <button
+                onClick={handleCopyTranscript}
+                className="text-[11px] font-semibold text-accent-600 hover:text-accent-700 transition-colors"
+              >
+                {copied ? 'Copied ✓' : 'Copy'}
+              </button>
+            </div>
             {result.analysis.sceneNotes && (
               <p className="text-xs italic text-gray-500 mb-3">{result.analysis.sceneNotes}</p>
             )}

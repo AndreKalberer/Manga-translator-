@@ -65,6 +65,26 @@ export default function UploadZone({
     });
   }, []);
 
+  // Paste-from-clipboard: Cmd/Ctrl+V anywhere on the page grabs any image
+  // files from the clipboard and adds them. Massive UX win for the
+  // screenshot-then-translate flow.
+  useEffect(() => {
+    if (disabled) return;
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = Array.from(e.clipboardData?.items ?? []);
+      const files = items
+        .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter((f): f is File => f !== null);
+      if (files.length > 0) {
+        e.preventDefault();
+        addFiles(files);
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [addFiles, disabled]);
+
   const removeFile = (index: number) => {
     setSelectedFiles((prev) => {
       const file = prev[index];
@@ -140,7 +160,7 @@ export default function UploadZone({
         <p className="text-gray-400 text-xs mt-1">
           {quotaExhausted
             ? 'Come back tomorrow for more free uses'
-            : 'or click to browse · JPEG, PNG, WebP · max 4 MB'}
+            : 'or click to browse · paste with ⌘V · JPEG, PNG, WebP · max 4 MB'}
         </p>
       </div>
 

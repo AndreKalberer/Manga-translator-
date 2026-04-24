@@ -39,19 +39,61 @@ export const metadata: Metadata = {
   },
 };
 
-// Schema.org SoftwareApplication entry — helps Google understand the site
-// as a web app rather than a generic page, improves rich-result eligibility.
+// FAQ copy duplicated here so Google sees FAQPage structured data at page
+// load. Keep in sync with the FAQ array in src/app/page.tsx.
+const FAQ_ENTRIES: Array<{ q: string; a: string }> = [
+  {
+    q: 'What counts as one "use"?',
+    a: 'Each panel you upload counts as one use. "Translate + Colorize" mode costs two uses because it runs both a translation pass and a colorization pass.',
+  },
+  {
+    q: 'Does it work on webtoons and manhwa?',
+    a: 'Yes. The model handles Japanese manga, Korean manhwa, and Chinese manhua automatically — no language setting needed.',
+  },
+  {
+    q: 'Why do I only get 10 free uses per day?',
+    a: 'Each panel costs real money to process via the AI models. A daily limit keeps the service free for everyone. The count resets at UTC midnight.',
+  },
+  {
+    q: 'Are my images stored anywhere?',
+    a: 'No. Panels are processed in memory and sent to OpenAI for translation and rendering. We do not save, log, or share your images.',
+  },
+  {
+    q: 'Can I upload a screenshot with browser or reader UI around the panel?',
+    a: 'Yes. The model crops to the panel and ignores browser chrome, status bars, and reader-app UI automatically.',
+  },
+  {
+    q: 'Can I translate multiple panels at once?',
+    a: 'Yes — drop up to 10 panels in at a time. They process one after another with a progress bar for each.',
+  },
+];
+
+// Schema.org structured data. SoftwareApplication identifies the site as a
+// web app (rich results); FAQPage lets Google render the FAQ answers
+// directly in search previews.
 const JSON_LD = {
   '@context': 'https://schema.org',
-  '@type': 'SoftwareApplication',
-  name: 'MangaTL',
-  description:
-    'AI-powered translator for manga, manhwa, and manhua panels. Upload a panel, get a publication-quality English translation rendered into the original bubbles.',
-  url: SITE_URL,
-  applicationCategory: 'UtilityApplication',
-  operatingSystem: 'Any (web)',
-  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-  inLanguage: 'en',
+  '@graph': [
+    {
+      '@type': 'SoftwareApplication',
+      name: 'MangaTL',
+      description:
+        'AI-powered translator for manga, manhwa, and manhua panels. Upload a panel, get a publication-quality English translation rendered into the original bubbles.',
+      url: SITE_URL,
+      applicationCategory: 'UtilityApplication',
+      operatingSystem: 'Any (web)',
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      inLanguage: 'en',
+    },
+    {
+      '@type': 'FAQPage',
+      mainEntity: FAQ_ENTRIES.map((item) => ({
+        '@type': 'Question',
+        name: item.q,
+        acceptedAnswer: { '@type': 'Answer', text: item.a },
+      })),
+    },
+  ],
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
