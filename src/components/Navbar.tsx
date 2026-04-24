@@ -13,7 +13,7 @@ interface NavbarProps {
 const NAV_LINKS = [
   { href: '/', label: 'Home' },
   { href: '/#translate', label: 'Translate' },
-  { href: '/#how-it-works', label: 'How It Works' },
+  { href: '/#why', label: 'Why MangaTL' },
   { href: '/#faq', label: 'FAQ' },
   { href: '/about', label: 'About' },
 ];

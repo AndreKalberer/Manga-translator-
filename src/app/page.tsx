@@ -337,6 +337,62 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* ---------- Why MangaTL vs ChatGPT ---------- */}
+        <section id="why" className="scroll-mt-20">
+          <div className="max-w-6xl mx-auto px-5 sm:px-8 pb-16">
+            <div className="bg-white rounded-[2.5rem] shadow-[0_30px_80px_-50px_rgba(244,63,94,0.3)] border border-accent-100/70 px-6 sm:px-10 md:px-14 py-12 md:py-16">
+              <div className="text-center space-y-3 mb-10 md:mb-14">
+                <p className="text-[11px] sm:text-xs font-bold tracking-[0.18em] uppercase text-accent-500">
+                  Why MangaTL
+                </p>
+                <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
+                  Why not just use ChatGPT?
+                </h2>
+                <p className="text-gray-500 text-sm max-w-xl mx-auto pt-1">
+                  ChatGPT can read text in a panel. It won&apos;t give you a
+                  finished translated panel — and that&apos;s the part that matters.
+                </p>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4 max-w-3xl mx-auto">
+                {/* ChatGPT column */}
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-6">
+                  <p className="text-xs font-bold tracking-wider uppercase text-gray-400 mb-4">
+                    ChatGPT
+                  </p>
+                  <ul className="space-y-3 text-sm text-gray-500">
+                    <li className="flex gap-2"><span aria-hidden>✗</span><span>Returns plain text — you Photoshop it back into bubbles yourself</span></li>
+                    <li className="flex gap-2"><span aria-hidden>✗</span><span>Requires Plus at $20/month for image-in workflows</span></li>
+                    <li className="flex gap-2"><span aria-hidden>✗</span><span>One panel at a time through chat</span></li>
+                    <li className="flex gap-2"><span aria-hidden>✗</span><span>Generic translations unless you know how to prompt</span></li>
+                    <li className="flex gap-2"><span aria-hidden>✗</span><span>Reproduces browser chrome and reader UI around the panel</span></li>
+                    <li className="flex gap-2"><span aria-hidden>✗</span><span>No paste-from-clipboard shortcut</span></li>
+                  </ul>
+                </div>
+
+                {/* MangaTL column */}
+                <div className="rounded-2xl border-2 border-accent-200 bg-gradient-to-br from-accent-50 to-white p-6 shadow-[0_10px_30px_-15px_rgba(244,63,94,0.2)]">
+                  <p className="text-xs font-bold tracking-wider uppercase text-accent-500 mb-4">
+                    MangaTL
+                  </p>
+                  <ul className="space-y-3 text-sm text-gray-700">
+                    <li className="flex gap-2"><span aria-hidden className="text-accent-500 font-bold">✓</span><span>Publication-ready panel with English lettered into the original bubbles</span></li>
+                    <li className="flex gap-2"><span aria-hidden className="text-accent-500 font-bold">✓</span><span>Free — 10 translations per day, no account</span></li>
+                    <li className="flex gap-2"><span aria-hidden className="text-accent-500 font-bold">✓</span><span>Batch up to 10 panels at once</span></li>
+                    <li className="flex gap-2"><span aria-hidden className="text-accent-500 font-bold">✓</span><span>Tuned for manga voice — Viz / Yen Press style, not literal</span></li>
+                    <li className="flex gap-2"><span aria-hidden className="text-accent-500 font-bold">✓</span><span>Auto-crops screenshots — ignores browser chrome and reader UI</span></li>
+                    <li className="flex gap-2"><span aria-hidden className="text-accent-500 font-bold">✓</span><span>Paste from clipboard with ⌘V — no file-picker click-through</span></li>
+                  </ul>
+                </div>
+              </div>
+
+              <p className="text-center text-xs text-gray-400 mt-8">
+                Transcript with speaker notes + original text comes free with every translation.
+              </p>
+            </div>
+          </div>
+        </section>
+
         {/* ---------- Header ad (only if no results yet) ---------- */}
         {doneResults.length === 0 && inProgressItems.length === 0 && (
           <div className="max-w-6xl mx-auto px-5 sm:px-8 pb-10">

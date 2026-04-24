@@ -3,6 +3,38 @@
 AI-powered translator for manga, manhwa, and manhua panels. Upload a panel; get a
 publication-quality English translation rendered back into the original bubbles.
 
+**Live:** <https://manga-tl-andres-projects-edc54d3b.vercel.app>
+_(Update this link if the Vercel project or team slug is renamed.)_
+
+## Why not just use ChatGPT?
+
+ChatGPT with vision can read text from a panel and translate it. But it stops
+there — you get a wall of English text, not a finished panel. MangaTL is built
+end-to-end for the full workflow:
+
+- **You get a finished panel, not just text.** ChatGPT won't redraw the panel
+  with the English inside the bubbles. You'd have to Photoshop the translations
+  back in yourself. MangaTL hands you back a publication-ready translated
+  panel with the text lettered into the original bubble shapes.
+- **Purpose-built for manga, manhwa, and manhua.** The translator prompt is
+  engineered for character voice matching (arrogant stays haughty, sarcastic
+  stays biting), bubble-kind awareness (speech vs thought vs SFX vs narration),
+  and publication-quality localized English in the style of Viz Media or Yen
+  Press — not literal machine translation.
+- **Free.** 10 translations per day with no account. ChatGPT's image-in /
+  image-out workflow requires Plus at \$20/month.
+- **Batch upload.** Queue up to 10 panels; they process sequentially with a
+  progress bar for each. ChatGPT forces one-at-a-time conversation.
+- **Automatic screenshot cropping.** Upload a panel with browser chrome, phone
+  status bars, or reader-app UI around it — we crop to the panel automatically.
+  ChatGPT reproduces the whole screenshot.
+- **Paste from clipboard.** Cmd/Ctrl+V anywhere. No file-picker click-through.
+- **Transcript included.** Get the bubble-by-bubble breakdown with speaker
+  notes and original text alongside the rendered panel — great for learning
+  the source language or double-checking nuance.
+- **No prompt engineering.** Drop the panel in. Don't have to explain what
+  manga is, what voice matching is, or remember to ask for the image back.
+
 ## What it does
 
 - **Two-stage pipeline.** A vision LLM (`gpt-5.2`) reads the panel, identifies every
