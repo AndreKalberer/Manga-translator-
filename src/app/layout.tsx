@@ -40,6 +40,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <span className="text-gray-300">Powered by OpenAI</span>
               <a href="/about" className="hover:text-gray-600 transition-colors">About</a>
               <a href="/privacy" className="hover:text-gray-600 transition-colors">Privacy</a>
+              <a href="mailto:hello@mangatl.com" className="hover:text-gray-600 transition-colors">Contact</a>
             </div>
           </div>
         </footer>
