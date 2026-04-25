@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { track } from '@vercel/analytics';
 import Navbar from '@/components/Navbar';
 import UploadZone from '@/components/UploadZone';
@@ -8,6 +8,13 @@ import ImageResultCard from '@/components/ImageResultCard';
 import ProgressBar from '@/components/ProgressBar';
 import AdUnit from '@/components/AdUnit';
 import HeroIllustration from '@/components/HeroIllustration';
+import SessionCharacters from '@/components/SessionCharacters';
+import {
+  loadCharacters,
+  saveCharacters,
+  mergeFromAnalysis,
+  type Character,
+} from '@/lib/characters';
 import {
   ProcessedImage,
   PanelAnalysis,
@@ -121,6 +128,12 @@ export default function HomePage() {
   const [mode, setModeState] = useState<Mode>('translate');
   const [options, setOptionsState] = useState<TranslationOptions>(DEFAULT_OPTIONS);
   const [compareMode, setCompareModeState] = useState<CompareMode>('stacked');
+  const [characters, setCharacters] = useState<Character[]>([]);
+  // Ref mirror so batch translations and re-renders see the latest character
+  // memory updates from prior files in the same batch (closures captured at
+  // handleSubmit time would otherwise see only the initial value).
+  const charactersRef = useRef<Character[]>([]);
+  useEffect(() => { charactersRef.current = characters; }, [characters]);
 
   // Remember last-picked options across sessions so returning users don't
   // re-pick every visit. Each value is validated against its enum so a
@@ -152,6 +165,34 @@ export default function HomePage() {
         setCompareModeState(savedCompare as CompareMode);
       }
     } catch { /* storage blocked or stale JSON */ }
+
+    // Characters live in sessionStorage (separate try block — sessionStorage
+    // may be available even when localStorage is blocked).
+    setCharacters(loadCharacters());
+  }, []);
+
+  // Whenever a translation or re-render produces a new analysis, merge its
+  // speakers into the running session memory and persist.
+  const ingestAnalysis = useCallback((analysis: PanelAnalysis) => {
+    setCharacters((prev) => {
+      const next = mergeFromAnalysis(prev, analysis);
+      saveCharacters(next);
+      return next;
+    });
+  }, []);
+
+  const removeCharacter = useCallback((id: string) => {
+    setCharacters((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      saveCharacters(next);
+      return next;
+    });
+  }, []);
+
+  const clearCharacters = useCallback(() => {
+    setCharacters([]);
+    saveCharacters([]);
+    track('characters_cleared');
   }, []);
 
   const setCompareMode = useCallback((next: CompareMode) => {
@@ -265,13 +306,15 @@ export default function HomePage() {
           const step = event.step as string;
 
           if (step === 'done') {
+            const reAnalysis = event.analysis as ProcessedImage['analysis'] | undefined;
             updateImage(imageId, {
               rerendering: false,
               rerenderError: undefined,
               variations: event.variations as ProcessedImage['variations'],
               selectedIndex: 0,
-              analysis: event.analysis as ProcessedImage['analysis'],
+              analysis: reAnalysis,
             });
+            if (reAnalysis) ingestAnalysis(reAnalysis);
             if (event.remaining !== undefined) {
               setQuota((prev) =>
                 prev
@@ -312,6 +355,12 @@ export default function HomePage() {
     formData.append('targetLang', fileOptions.targetLang);
     formData.append('style', fileOptions.style);
     formData.append('sfx', fileOptions.sfx);
+    // Send the latest session-character memory (read fresh per file so a
+    // batch upload accumulates context as each panel finishes).
+    const sessionChars = charactersRef.current;
+    if (sessionChars.length > 0) {
+      formData.append('characters', JSON.stringify(sessionChars));
+    }
     if (fileOptions.glossary && fileOptions.glossary.trim()) {
       formData.append('glossary', fileOptions.glossary);
     }
@@ -370,6 +419,7 @@ export default function HomePage() {
             selectedIndex: 0,
             analysis,
           });
+          if (analysis) ingestAnalysis(analysis);
           if (event.remaining !== undefined) {
             setQuota((prev) =>
               prev
@@ -613,6 +663,12 @@ export default function HomePage() {
                   Choose a mode, drop in your panels, and get clean English lettering.
                 </p>
               </div>
+
+              <SessionCharacters
+                characters={characters}
+                onRemove={removeCharacter}
+                onClear={clearCharacters}
+              />
 
               <UploadZone
                 onSubmit={handleSubmit}

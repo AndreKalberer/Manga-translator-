@@ -117,6 +117,8 @@ function buildSystemPrompt(opts: TranslationOptions): string {
   const styleBlock = styleSection(lang, opts.style);
   const sfxBlock = sfxSection(opts.sfx, lang);
   const glossaryBlock = glossarySection(opts.glossary);
+  // Pre-formatted by the API route via lib/characters.serializeForPrompt.
+  const charactersBlock = opts.characters?.trim() ?? '';
 
   return `You are a senior ${lang}-language manga localizer working at the quality bar of Viz Media, Yen Press, and Seven Seas. Your job is to analyze a single manga/manhwa/manhua panel and produce publication-quality ${lang} translations for every text element in it.
 
@@ -194,6 +196,8 @@ For SFX with no speaker, signs, narration boxes: empty string. Speaker descripti
 The \`sceneNotes\` field is one sentence (in English) describing what is visually happening in the panel: who is where, what action is occurring, what the emotional beat is. Example: "A young man in a school uniform glares at a smirking rival across a classroom; tension is high." This helps a human reviewer or a downstream rendering step place text correctly.
 
 ${glossaryBlock}
+
+${charactersBlock}
 
 Work quickly but carefully. Every line you produce is what the reader will see.`;
 }

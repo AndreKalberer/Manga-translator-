@@ -39,6 +39,10 @@ export interface TranslationOptions {
   style: TranslationStyle;
   sfx: SfxMode;
   glossary?: string;
+  /** Pre-formatted system-prompt block built from session character memory.
+      Server-side only; clients send a structured JSON list which the route
+      validates and serializes via `serializeForPrompt` from lib/characters. */
+  characters?: string;
 }
 
 export type BubbleKind = 'speech' | 'thought' | 'sfx' | 'narration' | 'sign';

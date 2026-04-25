@@ -5,6 +5,7 @@ import { translatePanel } from '@/lib/translator';
 import { checkAndConsume, DAILY_LIMIT, QUOTA_COOKIE_NAME } from '@/lib/quota';
 import { getClientIp } from '@/lib/ip';
 import { logSecurityEvent } from '@/lib/log';
+import { serializeForPrompt, type Character } from '@/lib/characters';
 import {
   LANGUAGE_NAMES,
   type Mode,
@@ -20,6 +21,8 @@ export const maxDuration = 300;
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const MAX_WIDTH = 1500;
 const MAX_GLOSSARY_LEN = 4000; // hard cap so users can't paste a novel
+const MAX_CHARACTERS = 20;
+const MAX_CHARACTERS_FIELD_LEN = 200;
 const VALID_MODES: Mode[] = ['translate', 'color', 'both'];
 const VALID_LANGS = Object.keys(LANGUAGE_NAMES) as Language[];
 const VALID_STYLES: TranslationStyle[] = ['official', 'literal', 'casual'];
@@ -158,6 +161,40 @@ export async function POST(request: NextRequest) {
       ? rawGlossary.trim()
       : '';
 
+  // Session character memory — auto-built client-side from prior translations
+  // in this tab. Validate strictly so a malicious client can't inject
+  // arbitrary instructions into the system prompt via this field.
+  const rawCharacters = formData.get('characters');
+  let charactersPromptBlock = '';
+  if (typeof rawCharacters === 'string' && rawCharacters.length > 0) {
+    try {
+      const parsed = JSON.parse(rawCharacters);
+      if (Array.isArray(parsed)) {
+        const cleaned: Character[] = [];
+        for (const c of parsed.slice(0, MAX_CHARACTERS)) {
+          if (
+            c &&
+            typeof c.id === 'string' &&
+            typeof c.description === 'string' &&
+            typeof c.voiceNotes === 'string' &&
+            typeof c.count === 'number' &&
+            typeof c.lastSeen === 'number' &&
+            c.description.trim().length > 0
+          ) {
+            cleaned.push({
+              id: c.id.slice(0, 64),
+              description: c.description.slice(0, MAX_CHARACTERS_FIELD_LEN),
+              voiceNotes: c.voiceNotes.slice(0, MAX_CHARACTERS_FIELD_LEN),
+              count: Math.max(1, Math.min(9999, c.count | 0)),
+              lastSeen: c.lastSeen,
+            });
+          }
+        }
+        charactersPromptBlock = serializeForPrompt(cleaned);
+      }
+    } catch { /* malformed JSON — silently drop */ }
+  }
+
   // Validate file BEFORE consuming quota, so a malformed upload doesn't burn
   // the user's daily allowance. Order matters: every check that can reject
   // must run while the quota is still un-touched.
@@ -270,7 +307,13 @@ export async function POST(request: NextRequest) {
         analysis = await Promise.race([
           translatePanel(
             pngBuffer,
-            { targetLang, style, sfx, glossary: glossary || undefined },
+            {
+              targetLang,
+              style,
+              sfx,
+              glossary: glossary || undefined,
+              characters: charactersPromptBlock || undefined,
+            },
             abortController.signal
           ),
           new Promise<never>((_, reject) =>
