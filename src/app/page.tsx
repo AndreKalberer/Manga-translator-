@@ -10,6 +10,7 @@ import AdUnit from '@/components/AdUnit';
 import HeroIllustration from '@/components/HeroIllustration';
 import {
   ProcessedImage,
+  PanelAnalysis,
   QuotaInfo,
   Mode,
   Language,
@@ -174,6 +175,114 @@ export default function HomePage() {
       prev.map((img) => (img.imageId === id ? { ...img, ...patch } : img))
     );
   }, []);
+
+  // Convert a data:image/png;base64,... URL back into a Blob so we can re-upload
+  // the original image to /api/rerender as a regular form file. Avoids needing
+  // server-side caching of originals.
+  const dataUrlToBlob = (dataUrl: string): Blob => {
+    const [header, base64] = dataUrl.split(',');
+    const mime = header.match(/data:([^;]+)/)?.[1] ?? 'image/png';
+    const bytes = atob(base64);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  };
+
+  const rerenderImage = useCallback(async (imageId: string, editedAnalysis: PanelAnalysis) => {
+    const img = queue.find((q) => q.imageId === imageId);
+    if (!img) return;
+    if (!img.originalDataUrl) {
+      updateImage(imageId, { rerenderError: 'Original image is no longer available.' });
+      return;
+    }
+
+    updateImage(imageId, { rerendering: true, rerenderError: undefined });
+    track('rerender_submit', {
+      mode: img.mode,
+      bubbles: editedAnalysis.bubbles.length,
+      lang: options.targetLang,
+    });
+
+    const formData = new FormData();
+    const blob = dataUrlToBlob(img.originalDataUrl);
+    formData.append('image', blob, `${img.originalFileName.replace(/\.[^.]+$/, '')}.png`);
+    formData.append('mode', img.mode);
+    formData.append('targetLang', options.targetLang);
+    formData.append('analysis', JSON.stringify(editedAnalysis));
+
+    try {
+      const response = await fetch('/api/rerender', { method: 'POST', body: formData });
+      if (!response.ok || !response.body) {
+        const text = await response.text().catch(() => '');
+        let message = 'Re-render failed.';
+        try {
+          const parsed = JSON.parse(text);
+          message = parsed.error ?? message;
+          if (response.status === 429 && parsed.remaining !== undefined) {
+            setQuota((prev) =>
+              prev ? { ...prev, remaining: parsed.remaining, resetAt: parsed.resetAt } : null
+            );
+          }
+        } catch { /* plain text */ }
+        updateImage(imageId, { rerendering: false, rerenderError: message });
+        track('rerender_error', { status: response.status, reason: message.slice(0, 80) });
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          if (!raw) continue;
+          let event: Record<string, unknown>;
+          try { event = JSON.parse(raw); } catch { continue; }
+          const step = event.step as string;
+
+          if (step === 'done') {
+            updateImage(imageId, {
+              rerendering: false,
+              rerenderError: undefined,
+              variations: event.variations as ProcessedImage['variations'],
+              selectedIndex: 0,
+              analysis: event.analysis as ProcessedImage['analysis'],
+            });
+            if (event.remaining !== undefined) {
+              setQuota((prev) =>
+                prev
+                  ? { ...prev, remaining: event.remaining as number, resetAt: event.resetAt as string }
+                  : null
+              );
+            }
+            track('rerender_done', {
+              mode: img.mode,
+              bubbles: editedAnalysis.bubbles.length,
+              lang: options.targetLang,
+            });
+          } else if (step === 'error') {
+            const message = (event.message as string) ?? 'Unknown error';
+            updateImage(imageId, { rerendering: false, rerenderError: message });
+            track('rerender_error', { status: 500, reason: message.slice(0, 80) });
+          }
+        }
+      }
+    } catch (err) {
+      updateImage(imageId, {
+        rerendering: false,
+        rerenderError: err instanceof Error ? err.message : 'Network error.',
+      });
+      track('rerender_error', { status: 0, reason: 'network' });
+    }
+  }, [queue, options.targetLang, updateImage]);
 
   const processFile = async (
     file: File,
@@ -532,6 +641,7 @@ export default function HomePage() {
                   key={img.imageId}
                   result={img}
                   modeLabel={MODE_LABELS[img.mode]}
+                  onRerender={rerenderImage}
                 />
               ))}
             </div>

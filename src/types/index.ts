@@ -71,6 +71,11 @@ export interface ProcessedImage {
   mode: Mode;
   analysis?: PanelAnalysis;
   errorMessage?: string;
+  /** Set true while a re-render is in flight (status stays 'done' so the card
+      remains visible; the card shows a spinner overlay). */
+  rerendering?: boolean;
+  /** If a re-render fails, surface the error inside the existing card. */
+  rerenderError?: string;
 }
 
 export interface QuotaInfo {
