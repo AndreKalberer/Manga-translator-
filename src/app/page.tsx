@@ -8,10 +8,30 @@ import ImageResultCard from '@/components/ImageResultCard';
 import ProgressBar from '@/components/ProgressBar';
 import AdUnit from '@/components/AdUnit';
 import HeroIllustration from '@/components/HeroIllustration';
-import { ProcessedImage, QuotaInfo, Mode } from '@/types';
+import {
+  ProcessedImage,
+  QuotaInfo,
+  Mode,
+  Language,
+  TranslationStyle,
+  SfxMode,
+  TranslationOptions,
+  LANGUAGE_NAMES,
+} from '@/types';
 
 const MODE_STORAGE_KEY = 'mtl.mode';
+const OPTIONS_STORAGE_KEY = 'mtl.options';
 const VALID_MODES = new Set<Mode>(['translate', 'color', 'both']);
+const VALID_LANGS = new Set<Language>(Object.keys(LANGUAGE_NAMES) as Language[]);
+const VALID_STYLES = new Set<TranslationStyle>(['official', 'literal', 'casual']);
+const VALID_SFX = new Set<SfxMode>(['translate', 'keep', 'bilingual']);
+
+const DEFAULT_OPTIONS: TranslationOptions = {
+  targetLang: 'en',
+  style: 'official',
+  sfx: 'translate',
+  glossary: '',
+};
 
 // FAQ entries are duplicated into layout.tsx's FAQPage JSON-LD so Google
 // can render rich-result FAQ cards. Keep this list and that one in sync.
@@ -94,21 +114,52 @@ export default function HomePage() {
   const [queue, setQueue] = useState<ProcessedImage[]>([]);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [mode, setModeState] = useState<Mode>('translate');
+  const [options, setOptionsState] = useState<TranslationOptions>(DEFAULT_OPTIONS);
 
-  // Remember the last selected mode across sessions so returning users
-  // don't re-pick every visit. Guarded against unknown values in case the
-  // Mode union changes in a future version.
+  // Remember last-picked options across sessions so returning users don't
+  // re-pick every visit. Each value is validated against its enum so a
+  // future schema change can't crash the app reading stale localStorage.
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(MODE_STORAGE_KEY);
-      if (saved && VALID_MODES.has(saved as Mode)) setModeState(saved as Mode);
-    } catch { /* storage blocked (incognito / private mode) */ }
+      const savedMode = localStorage.getItem(MODE_STORAGE_KEY);
+      if (savedMode && VALID_MODES.has(savedMode as Mode)) setModeState(savedMode as Mode);
+
+      const savedOptions = localStorage.getItem(OPTIONS_STORAGE_KEY);
+      if (savedOptions) {
+        const parsed = JSON.parse(savedOptions) as Partial<TranslationOptions>;
+        setOptionsState({
+          targetLang: VALID_LANGS.has(parsed.targetLang as Language)
+            ? (parsed.targetLang as Language)
+            : DEFAULT_OPTIONS.targetLang,
+          style: VALID_STYLES.has(parsed.style as TranslationStyle)
+            ? (parsed.style as TranslationStyle)
+            : DEFAULT_OPTIONS.style,
+          sfx: VALID_SFX.has(parsed.sfx as SfxMode)
+            ? (parsed.sfx as SfxMode)
+            : DEFAULT_OPTIONS.sfx,
+          glossary: typeof parsed.glossary === 'string' ? parsed.glossary : '',
+        });
+      }
+    } catch { /* storage blocked or stale JSON */ }
   }, []);
 
   const setMode = useCallback((next: Mode) => {
     setModeState(next);
     try { localStorage.setItem(MODE_STORAGE_KEY, next); } catch { /* ignore */ }
     track('mode_selected', { mode: next });
+  }, []);
+
+  const setOptions = useCallback((patch: Partial<TranslationOptions>) => {
+    setOptionsState((prev) => {
+      const next = { ...prev, ...patch };
+      try { localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      // Track only the structural changes (lang/style/sfx). Glossary text
+      // is user-typed content and not safe to send to analytics.
+      if (patch.targetLang) track('lang_selected', { lang: patch.targetLang });
+      if (patch.style) track('style_selected', { style: patch.style });
+      if (patch.sfx) track('sfx_selected', { sfx: patch.sfx });
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -124,10 +175,21 @@ export default function HomePage() {
     );
   }, []);
 
-  const processFile = async (file: File, imageId: string, fileMode: Mode): Promise<void> => {
+  const processFile = async (
+    file: File,
+    imageId: string,
+    fileMode: Mode,
+    fileOptions: TranslationOptions,
+  ): Promise<void> => {
     const formData = new FormData();
     formData.append('image', file);
     formData.append('mode', fileMode);
+    formData.append('targetLang', fileOptions.targetLang);
+    formData.append('style', fileOptions.style);
+    formData.append('sfx', fileOptions.sfx);
+    if (fileOptions.glossary && fileOptions.glossary.trim()) {
+      formData.append('glossary', fileOptions.glossary);
+    }
 
     const response = await fetch('/api/translate', { method: 'POST', body: formData });
 
@@ -192,6 +254,9 @@ export default function HomePage() {
           }
           track('translate_done', {
             mode: fileMode,
+            lang: fileOptions.targetLang,
+            style: fileOptions.style,
+            sfx: fileOptions.sfx,
             bubbles: analysis?.bubbles?.length ?? 0,
           });
         } else if (step === 'error') {
@@ -205,7 +270,15 @@ export default function HomePage() {
 
   const handleSubmit = async (files: File[]) => {
     const currentMode = mode;
-    track('translate_submit', { mode: currentMode, count: files.length });
+    const currentOptions = options;
+    track('translate_submit', {
+      mode: currentMode,
+      count: files.length,
+      lang: currentOptions.targetLang,
+      style: currentOptions.style,
+      sfx: currentOptions.sfx,
+      glossary: currentOptions.glossary && currentOptions.glossary.trim().length > 0 ? 1 : 0,
+    });
     const entries: ProcessedImage[] = files.map((file) => ({
       imageId: crypto.randomUUID(),
       originalFileName: file.name,
@@ -220,7 +293,7 @@ export default function HomePage() {
     setStatus('processing');
 
     for (let i = 0; i < files.length; i++) {
-      await processFile(files[i], entries[i].imageId, currentMode);
+      await processFile(files[i], entries[i].imageId, currentMode, currentOptions);
     }
 
     setStatus('done');
@@ -420,6 +493,8 @@ export default function HomePage() {
                 onSubmit={handleSubmit}
                 mode={mode}
                 onModeChange={setMode}
+                options={options}
+                onOptionsChange={setOptions}
                 disabled={isProcessing}
                 quotaExhausted={quotaExhausted}
                 remaining={quota?.remaining}

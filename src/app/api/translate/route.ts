@@ -5,14 +5,25 @@ import { translatePanel } from '@/lib/translator';
 import { checkAndConsume, DAILY_LIMIT, QUOTA_COOKIE_NAME } from '@/lib/quota';
 import { getClientIp } from '@/lib/ip';
 import { logSecurityEvent } from '@/lib/log';
-import type { Mode, PanelAnalysis } from '@/types';
+import {
+  LANGUAGE_NAMES,
+  type Mode,
+  type Language,
+  type TranslationStyle,
+  type SfxMode,
+  type PanelAnalysis,
+} from '@/types';
 
 // Requires Vercel Pro plan (Pro caps at 300s; Hobby caps at 60s).
 export const maxDuration = 300;
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024;
 const MAX_WIDTH = 1500;
+const MAX_GLOSSARY_LEN = 4000; // hard cap so users can't paste a novel
 const VALID_MODES: Mode[] = ['translate', 'color', 'both'];
+const VALID_LANGS = Object.keys(LANGUAGE_NAMES) as Language[];
+const VALID_STYLES: TranslationStyle[] = ['official', 'literal', 'casual'];
+const VALID_SFX: SfxMode[] = ['translate', 'keep', 'bilingual'];
 
 // First few bytes of valid image formats. Belt-and-suspenders check before
 // sharp — rejects polyglots and files with spoofed Content-Type headers.
@@ -126,6 +137,27 @@ export async function POST(request: NextRequest) {
   }
   const mode = rawMode as Mode;
 
+  // Translation options. All optional with safe defaults so existing clients
+  // (that pre-date Wave 1) keep working unchanged. Anything unrecognized
+  // silently falls back to default — these knobs are not billing-relevant.
+  const rawLang = formData.get('targetLang');
+  const targetLang: Language = VALID_LANGS.includes(rawLang as Language)
+    ? (rawLang as Language)
+    : 'en';
+  const rawStyle = formData.get('style');
+  const style: TranslationStyle = VALID_STYLES.includes(rawStyle as TranslationStyle)
+    ? (rawStyle as TranslationStyle)
+    : 'official';
+  const rawSfx = formData.get('sfx');
+  const sfx: SfxMode = VALID_SFX.includes(rawSfx as SfxMode)
+    ? (rawSfx as SfxMode)
+    : 'translate';
+  const rawGlossary = formData.get('glossary');
+  const glossary =
+    typeof rawGlossary === 'string' && rawGlossary.length <= MAX_GLOSSARY_LEN
+      ? rawGlossary.trim()
+      : '';
+
   // Validate file BEFORE consuming quota, so a malformed upload doesn't burn
   // the user's daily allowance. Order matters: every check that can reject
   // must run while the quota is still un-touched.
@@ -233,10 +265,14 @@ export async function POST(request: NextRequest) {
       let analysis: PanelAnalysis | undefined;
       if (mode !== 'color') {
         await writer.write(sseEvent({ step: 'analyzing', mode }));
-        console.log('[translate] calling translatePanel...');
+        console.log(`[translate] calling translatePanel — lang=${targetLang} style=${style} sfx=${sfx} glossary=${glossary ? glossary.length : 0}`);
         const ANALYZE_TIMEOUT_MS = 60 * 1000;
         analysis = await Promise.race([
-          translatePanel(pngBuffer, abortController.signal),
+          translatePanel(
+            pngBuffer,
+            { targetLang, style, sfx, glossary: glossary || undefined },
+            abortController.signal
+          ),
           new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('Translation analysis timed out after 60 seconds.')), ANALYZE_TIMEOUT_MS)
           ),
@@ -250,7 +286,7 @@ export async function POST(request: NextRequest) {
       console.log('[translate] calling renderPanel...');
       const RENDER_TIMEOUT_MS = 230 * 1000; // leave headroom under the 300s maxDuration ceiling after the analyze step
       const variationBase64s = await Promise.race([
-        renderPanel(pngBuffer, mode, analysis, abortController.signal),
+        renderPanel(pngBuffer, mode, targetLang, analysis, abortController.signal),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Render timed out after 230 seconds.')), RENDER_TIMEOUT_MS)
         ),

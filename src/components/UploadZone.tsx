@@ -3,12 +3,15 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { formatFileSize } from '@/lib/utils';
 import ModeSelector from './ModeSelector';
-import type { Mode } from '@/types';
+import TranslationOptionsPanel from './TranslationOptions';
+import type { Mode, TranslationOptions } from '@/types';
 
 interface UploadZoneProps {
   onSubmit: (files: File[]) => void;
   mode: Mode;
   onModeChange: (mode: Mode) => void;
+  options: TranslationOptions;
+  onOptionsChange: (next: Partial<TranslationOptions>) => void;
   disabled?: boolean;
   quotaExhausted?: boolean;
   remaining?: number;
@@ -28,6 +31,8 @@ export default function UploadZone({
   onSubmit,
   mode,
   onModeChange,
+  options,
+  onOptionsChange,
   disabled,
   quotaExhausted,
   remaining,
@@ -122,6 +127,15 @@ export default function UploadZone({
         disabled={disabled}
         remaining={remaining}
       />
+
+      {/* Translation options — hidden for color-only mode (no translation happens) */}
+      {mode !== 'color' && (
+        <TranslationOptionsPanel
+          options={options}
+          onChange={onOptionsChange}
+          disabled={disabled}
+        />
+      )}
 
       {/* Drop zone */}
       <div
