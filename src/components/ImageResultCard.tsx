@@ -6,11 +6,19 @@ import { ProcessedImage, PanelAnalysis } from '@/types';
 interface ImageResultCardProps {
   result: ProcessedImage;
   modeLabel?: string;
+  /** Layout the Original / Translation pair vertically (stacked) or in a 2-col
+      grid at md+ widths (sideBySide). Mobile always falls back to stacked. */
+  compareMode?: 'stacked' | 'sideBySide';
   /** Re-render with edited bubble translations. Triggers /api/rerender server-side. */
   onRerender?: (imageId: string, editedAnalysis: PanelAnalysis) => void;
 }
 
-export default function ImageResultCard({ result, modeLabel, onRerender }: ImageResultCardProps) {
+export default function ImageResultCard({
+  result,
+  modeLabel,
+  compareMode = 'stacked',
+  onRerender,
+}: ImageResultCardProps) {
   const [selected, setSelected] = useState(0);
   const [copied, setCopied] = useState(false);
 
@@ -120,39 +128,52 @@ export default function ImageResultCard({ result, modeLabel, onRerender }: Image
       </div>
 
       <div className="p-4 space-y-5">
-        {/* Original */}
-        <div>
-          <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-widest mb-2">
-            Original
-          </p>
-          <img
-            src={result.originalDataUrl}
-            alt="Original manga panel"
-            className="w-full rounded-xl object-contain max-h-64 bg-gray-50"
-          />
-        </div>
+        {/* Original / Translation pair. Side-by-side at md+ if requested,
+            else stacked. Mobile is always stacked because side-by-side
+            images at <md would be unreadably small. */}
+        <div
+          className={`gap-4 ${
+            compareMode === 'sideBySide'
+              ? 'grid grid-cols-1 md:grid-cols-2'
+              : 'space-y-5'
+          }`}
+        >
+          {/* Original */}
+          <div>
+            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-widest mb-2">
+              Original
+            </p>
+            <img
+              src={result.originalDataUrl}
+              alt="Original manga panel"
+              className={`w-full rounded-xl object-contain bg-gray-50 ${
+                compareMode === 'sideBySide' ? '' : 'max-h-64'
+              }`}
+            />
+          </div>
 
-        {/* Translation (with re-render overlay) */}
-        <div className="relative">
-          <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-widest mb-2">
-            Translation
-          </p>
-          <img
-            src={selectedVariation.dataUrl}
-            alt="Translated panel"
-            className={`w-full rounded-xl object-contain bg-gray-50 transition-opacity ${
-              isRerendering ? 'opacity-40' : 'opacity-100'
-            }`}
-          />
-          {isRerendering && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none">
-              <div
-                className="w-8 h-8 rounded-full border-2 border-accent-200 border-t-accent-500 animate-spin"
-                aria-hidden
-              />
-              <p className="text-xs font-semibold text-accent-600">Re-rendering with your edits…</p>
-            </div>
-          )}
+          {/* Translation (with re-render overlay) */}
+          <div className="relative">
+            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-widest mb-2">
+              Translation
+            </p>
+            <img
+              src={selectedVariation.dataUrl}
+              alt="Translated panel"
+              className={`w-full rounded-xl object-contain bg-gray-50 transition-opacity ${
+                compareMode === 'sideBySide' ? '' : 'max-h-64'
+              } ${isRerendering ? 'opacity-40' : 'opacity-100'}`}
+            />
+            {isRerendering && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none">
+                <div
+                  className="w-8 h-8 rounded-full border-2 border-accent-200 border-t-accent-500 animate-spin"
+                  aria-hidden
+                />
+                <p className="text-xs font-semibold text-accent-600">Re-rendering with your edits…</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {rerenderError && (

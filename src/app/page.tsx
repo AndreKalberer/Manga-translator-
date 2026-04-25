@@ -22,10 +22,14 @@ import {
 
 const MODE_STORAGE_KEY = 'mtl.mode';
 const OPTIONS_STORAGE_KEY = 'mtl.options';
+const COMPARE_STORAGE_KEY = 'mtl.compare';
 const VALID_MODES = new Set<Mode>(['translate', 'color', 'both']);
 const VALID_LANGS = new Set<Language>(Object.keys(LANGUAGE_NAMES) as Language[]);
 const VALID_STYLES = new Set<TranslationStyle>(['official', 'literal', 'casual']);
 const VALID_SFX = new Set<SfxMode>(['translate', 'keep', 'bilingual']);
+
+type CompareMode = 'stacked' | 'sideBySide';
+const VALID_COMPARE = new Set<CompareMode>(['stacked', 'sideBySide']);
 
 const DEFAULT_OPTIONS: TranslationOptions = {
   targetLang: 'en',
@@ -116,6 +120,7 @@ export default function HomePage() {
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [mode, setModeState] = useState<Mode>('translate');
   const [options, setOptionsState] = useState<TranslationOptions>(DEFAULT_OPTIONS);
+  const [compareMode, setCompareModeState] = useState<CompareMode>('stacked');
 
   // Remember last-picked options across sessions so returning users don't
   // re-pick every visit. Each value is validated against its enum so a
@@ -141,7 +146,18 @@ export default function HomePage() {
           glossary: typeof parsed.glossary === 'string' ? parsed.glossary : '',
         });
       }
+
+      const savedCompare = localStorage.getItem(COMPARE_STORAGE_KEY);
+      if (savedCompare && VALID_COMPARE.has(savedCompare as CompareMode)) {
+        setCompareModeState(savedCompare as CompareMode);
+      }
     } catch { /* storage blocked or stale JSON */ }
+  }, []);
+
+  const setCompareMode = useCallback((next: CompareMode) => {
+    setCompareModeState(next);
+    try { localStorage.setItem(COMPARE_STORAGE_KEY, next); } catch { /* ignore */ }
+    track('compare_mode_changed', { mode: next });
   }, []);
 
   const setMode = useCallback((next: Mode) => {
@@ -629,18 +645,55 @@ export default function HomePage() {
         {/* ---------- Results ---------- */}
         {doneResults.length > 0 && (
           <section className="max-w-6xl mx-auto px-5 sm:px-8 pb-20 space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
               <h2 className="text-xl font-bold text-gray-900">Results</h2>
-              <span className="text-sm text-gray-400">
-                {doneResults.length} panel{doneResults.length !== 1 ? 's' : ''} processed
-              </span>
+              <div className="flex items-center gap-3">
+                {/* Stacked / Side-by-side toggle (hidden on mobile — side-by-side
+                    images at <md widths would be too small to read). */}
+                <div className="hidden md:inline-flex items-center bg-gray-100 rounded-lg p-0.5 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setCompareMode('stacked')}
+                    className={`px-2.5 py-1 rounded-md transition-colors ${
+                      compareMode === 'stacked'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Stacked
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCompareMode('sideBySide')}
+                    className={`px-2.5 py-1 rounded-md transition-colors ${
+                      compareMode === 'sideBySide'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Side-by-side
+                  </button>
+                </div>
+                <span className="text-sm text-gray-400">
+                  {doneResults.length} panel{doneResults.length !== 1 ? 's' : ''} processed
+                </span>
+              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div
+              className={`grid gap-5 ${
+                // In side-by-side mode, give each card the full row so the
+                // Original | Translation pair has room to breathe at md+ widths.
+                compareMode === 'sideBySide'
+                  ? 'grid-cols-1'
+                  : 'grid-cols-1 md:grid-cols-2'
+              }`}
+            >
               {doneResults.map((img) => (
                 <ImageResultCard
                   key={img.imageId}
                   result={img}
                   modeLabel={MODE_LABELS[img.mode]}
+                  compareMode={compareMode}
                   onRerender={rerenderImage}
                 />
               ))}
